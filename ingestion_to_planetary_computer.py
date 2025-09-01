@@ -122,8 +122,10 @@ def optimized_batch_ingest(batch_size: int):
         datetime=param_date_range
     )
     
-    # items = [item for item in search.item_collection() if item.id.startswith("MOD11A1")]
-    items = [item for item in search.item_collection() if item.id.startswith("MOD13Q1")]
+    # filter the exact collection from the search (the search can sometimes return collections within the collection name that aren't poi)
+    collection_match = pc_collection.split("-")
+    collection_match = f"{collection_match[0][:3]}{collection_match[1]}".upper()
+    items = [item for item in search.item_collection() if item.id.startswith(collection_match)]
     param_max_items = len(items)
     print(f"Searching for items (up to {param_max_items} total)...")
     
