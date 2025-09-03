@@ -11,18 +11,6 @@ from pystac_client import Client
 from pystac import STACValidationError, Item
 import planetary_computer
 
-# Configuration
-geocatalog_url = "https://geospatialdm.fmd9dgfcd2fab5hw.westeurope.geocatalog.spatio.azure.com"
-geocatalog_url = geocatalog_url.rstrip("/")
-api_version = "2025-04-30-preview"
-MPC_APP_ID = "https://geocatalog.spatio.azure.com"
-
-# User selections
-# pc_collection = "modis-11A1-061" # for MODIS land surface temperature
-pc_collection = "modis-13Q1-061"
-bbox_aoi = [2.316388, 3.837669, 15.126447, 14.153350]
-param_date_range = "2000-02-18/2025-09-01"
-
 # Token management
 _access_token = None
 def getBearerToken():
@@ -379,6 +367,20 @@ def verify_ingestion(collection_id: str) -> int:
 # ========== MAIN EXECUTION ==========
 
 if __name__ == "__main__":
+    
+    # Configuration
+    geocatalog_url = "https://geospatialdm.fmd9dgfcd2fab5hw.westeurope.geocatalog.spatio.azure.com"
+    geocatalog_url = geocatalog_url.rstrip("/")
+    api_version = "2025-04-30-preview"
+    MPC_APP_ID = "https://geocatalog.spatio.azure.com"
+
+    # User selections
+    # pc_collection = "modis-11A1-061" # for MODIS land surface temperature
+    pc_collection = "modis-13Q1-061"
+    bbox_aoi = [2.316388, 3.837669, 15.126447, 14.153350]
+    param_date_range = "2000-02-18/2025-09-01"
+
+
     print("=" * 60)
     print("OPTIMIZED PLANETARY COMPUTER PRO INGESTION")
     print("=" * 60)
