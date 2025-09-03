@@ -1,12 +1,14 @@
 import json
 import random
 import time
+import re
 from datetime import datetime, timedelta
 from typing import List
 
 import requests
 from azure.identity import AzureCliCredential
 from pystac_client import Client
+from pystac import STACValidationError, Item
 import planetary_computer
 
 # Configuration
@@ -40,6 +42,70 @@ def raise_for_status(r: requests.Response) -> None:
             print(r.content)
         finally:
             raise
+
+def validate_and_fix_item(item: Item):
+    """Try to validate the item, if it fails validation, then try to fix it"""
+    try: 
+        item.validate()
+        print("Item validated - no fixes needed")
+        return True
+    except STACValidationError as e:
+        error_msg = str(e).lower()
+        
+        # Check if this is specifically a classification extension error
+        if 'classification' in error_msg and ('name' in error_msg or 'required' in error_msg):
+            print("Classification validation error detected, attempting fix...")
+            
+            # Apply the fix
+            fixed = fix_classification_names(item)
+            
+            if fixed:
+                print(f"Applied classification fixes to assets: {fixed}")
+                # Try validation again
+                try:
+                    item.validate()
+                    print("Item validated successfully after classification fix")
+                    return True
+                except STACValidationError as e2:
+                    print(f"Validation still failing after fix: {e2}")
+                    return False
+            else:
+                print("No classification fixes were applicable")
+                return False
+        else:
+            # Non-classification validation error - don't try to fix
+            print(f"Validation failed with non-classification error: {e}")
+            return False
+
+
+def fix_classification_names(item: Item, auto_generate_names=True):
+    """Fix missing name fields in classification classes"""
+    
+    fixed_assets = []
+    
+    for asset_key, asset in item.assets.items():
+        if 'classification:classes' in asset.extra_fields:
+            classes = asset.extra_fields['classification:classes']
+            modified = False
+            
+            for cls in classes:
+                if 'name' not in cls:
+                    if auto_generate_names:
+                        # Generate name from description or value
+                        if 'description' in cls:
+                            name = cls['description'].lower()
+                            name = re.sub(r'[^0-9a-zA-Z\s]', '', name)
+                            name = re.sub(r'\s+', '_', name.strip())
+                        else:
+                            name = f"class_{cls.get('value', 'unknown')}"
+                        
+                        cls['name'] = name
+                        modified = True
+            
+            if modified:
+                fixed_assets.append(asset_key)
+    
+    return fixed_assets
 
 def optimized_batch_ingest(batch_size: int):
     """
@@ -132,8 +198,10 @@ def optimized_batch_ingest(batch_size: int):
     # Process items page by page
     try:
         for item in items:
-            item_dict = item.to_dict()
             
+            validate_and_fix_item(item)
+            
+            item_dict = item.to_dict()
             total_searched += 1
             
             # Update collection reference
@@ -178,7 +246,7 @@ def optimized_batch_ingest(batch_size: int):
                 
                 # Small delay between batches to avoid overwhelming the API
                 time.sleep(1)
-    
+
     except Exception as e:
         print(f"\nWarning: Search interrupted - {e}")
         print(f"Continuing with {len(batch)} items in current batch...")
@@ -325,7 +393,7 @@ if __name__ == "__main__":
         if operation_ids:
             print("\nMonitoring ingestion operations...")
             monitor_ingestion_operations(operation_ids)
-
+        
         # Verify the ingestion
         time.sleep(10)  # Give it a moment to process
         verify_ingestion(collection_id)
