@@ -1,5 +1,5 @@
 from data_extraction import find_tiff_url
-from processing import decompress_convert_to_cog
+from processing import decompress_convert_to_cog_with_retry
 
 if __name__ == "__main__":
 
@@ -20,7 +20,7 @@ if __name__ == "__main__":
         data_urls.append({"year": str(i + 1981), "urls": urls})
     
     # iterate through all the years, and convert to COGS
-    directory = "nigeria_tifs/"
+    directory = "data/nigeria_tifs/"
     
     # for parallel workflow, convert to a flat list from the nested data_urls list
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -35,11 +35,11 @@ if __name__ == "__main__":
     
     
     # parallel code to speed up extraction and processing of data
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         # Create futures and map them to work items
         future_to_item = {}
         for item in work_items:
-            future = executor.submit(decompress_convert_to_cog, item, directory)
+            future = executor.submit(decompress_convert_to_cog_with_retry, item, directory)
             future_to_item[future] = item
         
         for future in tqdm.tqdm(as_completed(future_to_item.keys()), total=len(future_to_item),  desc="Processing files"):

@@ -1,10 +1,13 @@
 import gzip
+import requests
+import time
+from random import uniform
+
 import rasterio
 from rasterio.windows import from_bounds
 from rasterio.enums import Resampling
 from rasterio.crs import CRS
 from rasterio.warp import transform_bounds
-import requests
 
 
 def unzip_file(url: str) -> bytes:
@@ -125,7 +128,7 @@ def decompress_convert_to_cog(work_item: dict, directory: str):
     decompressed_file = unzip_file(work_item['url'])
     
     # full path of the output tif files
-    full_path_to_file = directory + file_name
+    full_path_to_file = directory + "/raw/" + file_name
     
     with open(full_path_to_file, "wb") as f:
         f.write(decompressed_file)
@@ -135,3 +138,16 @@ def decompress_convert_to_cog(work_item: dict, directory: str):
     bbox_aoi = [2.316388, 3.837669, 15.126447, 14.153350]
     bbox_crs = "EPSG:4326"
     clip_to_cog(full_path_to_file, clipped_tiff, bbox_aoi, bbox_crs)    
+
+
+def decompress_convert_to_cog_with_retry(work_item: dict, directory: str, max_retries: int = 3):
+    for attempt in range(max_retries):
+        try:
+            decompress_convert_to_cog(work_item, directory)
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = uniform(1, 3) * (2 ** attempt)  # Exponential backoff
+                time.sleep(wait_time)
+            else:
+                raise e
