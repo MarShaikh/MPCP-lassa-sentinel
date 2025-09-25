@@ -1,7 +1,11 @@
 import gzip
 import requests
 import time
+import json
+import os
+from datetime import datetime
 from random import uniform
+from typing import List, Tuple
 
 import rasterio
 from rasterio.windows import from_bounds
@@ -9,6 +13,8 @@ from rasterio.enums import Resampling
 from rasterio.crs import CRS
 from rasterio.warp import transform_bounds
 
+from azure.storage.blob import BlobServiceClient
+from azure.identity import DefaultAzureCredential
 
 def unzip_file(url: str) -> bytes:
     """
@@ -110,9 +116,8 @@ def decompress_convert_to_cog(work_item: dict, directory: str):
     
     Returns
     -------
-    None
-        This function does not return any value. It performs file I/O operations and
-        creates processed files on disk.
+    full_path_to_file: str
+        Returns the full local path to the file that is processed
     
     Note
     ----
@@ -124,20 +129,24 @@ def decompress_convert_to_cog(work_item: dict, directory: str):
     year_dir = str(year) + "/"
     
     # getting file name from url
-    file_name = url.split(year_dir)[1].replace(".gz", "")
+    raw_file_name = url.split(year_dir)[1].replace(".gz", "")
     decompressed_file = unzip_file(work_item['url'])
     
     # full path of the output tif files
-    full_path_to_file = directory + "/raw/" + file_name
+    raw_file_path = os.path.join(directory, "raw-data", raw_file_name)
     
-    with open(full_path_to_file, "wb") as f:
+    with open(raw_file_path, "wb") as f:
         f.write(decompressed_file)
     
-    # change this to adapt it to other locations
-    clipped_tiff = f"{directory}cogs/" + f"nigeria-cog-{file_name}" 
+    cog_file_name = f"nigeria-cog-{raw_file_name}"
+    clipped_tiff_path = os.path.join(f"{directory}processed-cogs", cog_file_name)
     bbox_aoi = [2.316388, 3.837669, 15.126447, 14.153350]
     bbox_crs = "EPSG:4326"
-    clip_to_cog(full_path_to_file, clipped_tiff, bbox_aoi, bbox_crs)    
+    
+    clip_to_cog(raw_file_path, clipped_tiff_path, bbox_aoi, bbox_crs)
+    
+    # return COG file path
+    return (clipped_tiff_path, cog_file_name, raw_file_path, raw_file_name)    
 
 
 def decompress_convert_to_cog_with_retry(work_item: dict, directory: str, max_retries: int = 3):
@@ -151,3 +160,120 @@ def decompress_convert_to_cog_with_retry(work_item: dict, directory: str, max_re
                 time.sleep(wait_time)
             else:
                 raise e
+            
+    
+def update_progress_file(task_id, completed, failed_files):  # Write to progress/task_{id}.json  
+    """
+    Updates a progress file called {task_id}.json and uploads it to logs on Azure Blob Store
+
+    Parameters:
+    -----------
+    task_id: str
+        Batch number 
+    completed: str
+        The number of files that were processed in this batch
+    failed_files: dict
+        A dict of failed files that could have failed due to various reasons
+
+    Returns
+    -------
+    None
+    """
+    iso_timestamp = datetime.now().isoformat()
+    batch_number = task_id
+    completed = completed
+    
+    json_file = {
+        "iso_timestamp": iso_timestamp,
+        "batch_number": batch_number,
+        "completed": completed,
+        "failed_files": failed_files
+    }
+    
+    local_path = "../data/nigeria_tifs/batch-logs"
+    file_name = f"{task_id}.json"
+    upload_file_path = os.path.join(local_path, file_name)
+    container_name = "batch-logs"
+
+    with open(upload_file_path, 'w') as f:
+        json.dump(json_file, f)
+
+    upload_blob_to_azure(container_name=container_name, file_path=upload_file_path, file_name=file_name)
+    cleanup_local_files(upload_file_path)
+
+    
+    
+def upload_blob_to_azure(container_name: str, file_path: str, file_name: str):
+    """
+    Uploads a local file at <file_path> to a blob names <file_name> within a container <container_name>
+
+    Parameters:
+    ----------
+    container_name: str
+        Name of the container on Azure Blob Storage account
+    
+    file_path: str
+        Path to the local file
+
+    file_name: str
+        Name of the uploaded file in the container
+
+    Returns:
+    -------
+    None
+    """
+    
+    # uses the default credential option on this machine
+    credential = DefaultAzureCredential()
+
+    # Create blob service client
+    blob_service_client = BlobServiceClient(
+        account_url="https://mpcpstorageaccount.blob.core.windows.net",
+        credential=credential
+    )
+    
+    blob_client = blob_service_client.get_blob_client(container = container_name, blob=file_name)
+    
+    print(f"\nUploading to Azure as blob:\n\t" + file_path)
+    with open(file = file_path, mode = "rb") as data:
+        blob_client.upload_blob(data)    
+
+def cleanup_local_files(file_paths: List[Tuple] | str):  # Delete local files after uploading them to Azure Blob
+    try:
+        if type(file_paths) == str:
+            os.remove(file_paths)
+            print(f"Local {file_paths} removed")
+        else:
+            for (i, j) in file_paths:
+                os.remove(i) # processed file
+                os.remove(j) # raw file
+                print(f"Local raw file removed: {i} and COG file: {j} removed.")
+    except FileNotFoundError:
+        print(f"File '{i}' not found.")
+        print(f"File '{j}' not found.")
+    
+
+def process_batch_with_progress(work_items_chunk, task_id):
+    failed_files = []
+    completed = []
+    directory = "../data/nigeria_tifs/" # hard coding this for local run
+    
+    processed_count = 0
+    for i, item in enumerate(work_items_chunk):
+        try: 
+            cog_container_name = "processed-cogs"
+            raw_container_name = "raw-data"
+            cog_file_path, cog_file_name, raw_file_path, raw_file_name = decompress_convert_to_cog(item, directory)
+            upload_blob_to_azure(container_name=cog_container_name, file_path=cog_file_path, file_name=cog_file_name)
+            upload_blob_to_azure(container_name=raw_container_name, file_path=raw_file_path, file_name=raw_file_name)
+            completed.append((cog_file_path, raw_file_path))
+        except Exception as e:
+            failed_files.append({"item": item, "Error": str(e)})
+            print(f"Failed: {item} - Error: {str(e)}")
+
+        processed_count += 1
+        
+        if processed_count % 10 == 0 or i == len(work_items_chunk) - 1:
+            print(f"Task ID: {task_id}, Completed: {completed}, Failed Files: {failed_files}")
+            update_progress_file(task_id, len(completed), failed_files)
+            cleanup_local_files(completed)
