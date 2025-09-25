@@ -1,5 +1,5 @@
 from data_extraction import find_tiff_url
-from processing import decompress_convert_to_cog_with_retry
+from processing import process_batch_with_progress
 
 if __name__ == "__main__":
 
@@ -23,8 +23,8 @@ if __name__ == "__main__":
     directory = "data/nigeria_tifs/"
     
     # for parallel workflow, convert to a flat list from the nested data_urls list
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import tqdm
+    # from concurrent.futures import ThreadPoolExecutor, as_completed
+    # import tqdm
 
     work_items = []
     failed_files = []
@@ -33,21 +33,10 @@ if __name__ == "__main__":
         for url in data['urls']:
             work_items.append({"year": data['year'], "url": url})
     
-    
-    # parallel code to speed up extraction and processing of data
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        # Create futures and map them to work items
-        future_to_item = {}
-        for item in work_items:
-            future = executor.submit(decompress_convert_to_cog_with_retry, item, directory)
-            future_to_item[future] = item
-        
-        for future in tqdm.tqdm(as_completed(future_to_item.keys()), total=len(future_to_item),  desc="Processing files"):
-            work_item = future_to_item[future]
-            try:
-                future.result() 
-            except Exception as e:
-                failed_files.append(work_item)
-                print(f"Failed: {work_item['url']} - Error: {str(e)}")
-    
-    print(f"\nCompleted! {len(failed_files)} files failed out of {len(work_items)} total")
+    # create chunks of data for processing
+    batch = 10
+    work_items_chunks = [work_items[i:i+batch] for i in range(0, len(work_items), batch)]
+    failed_files = []
+    completed = []
+    for task_id, work_items_chunk in enumerate(work_items_chunks[0:1]):
+        process_batch_with_progress(work_items_chunk, task_id)
