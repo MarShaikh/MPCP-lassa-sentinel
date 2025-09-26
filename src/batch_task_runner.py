@@ -1,11 +1,11 @@
 import os
 import json
 import sys
-from typing import List
+from typing import List, Dict
 
 from processing import process_batch_with_progress
 
-def get_work_items_from_environment() -> List[dict]:
+def get_work_items_from_environment() -> List[Dict]:
     """
     Retrieves work items from the WORK_ITEMS_JSON environment variable
     and parses them back into a list of dictionaries.
