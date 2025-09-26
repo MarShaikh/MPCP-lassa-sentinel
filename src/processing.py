@@ -253,7 +253,7 @@ def cleanup_local_files(file_paths: List[Tuple] | str):  # Delete local files af
         print(f"File '{j}' not found.")
     
 
-def process_batch_with_progress(work_items_chunk, task_id):
+def process_batch_with_progress(work_items_chunk: List[dict], task_id: int):
     failed_files = []
     completed = []
     directory = "../data/nigeria_tifs/" # hard coding this for local run
