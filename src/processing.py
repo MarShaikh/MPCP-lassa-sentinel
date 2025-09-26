@@ -16,9 +16,28 @@ from rasterio.warp import transform_bounds
 from azure.storage.blob import BlobServiceClient
 from azure.identity import DefaultAzureCredential
 
-def get_task_id():
-    # in batch environment; add this before pushing it to batch
-    return os.environ.get('AZ_BATCH_TASK_ID', f'local_task_{int(time.time())}')
+# create chunks of data for processing
+def create_chunks(work_items: List[dict], chunk_size: int = 550):
+    """
+    Splits a list of work items into smaller chunks for batch processing.
+    Parameters
+    ----------
+    work_items : List[dict]
+        A list of dictionaries, where each dictionary represents a work item
+        (e.g., containing 'year' and 'url' for a file to process).
+    chunk_size : int, optional
+        The maximum number of work items to include in each chunk.
+        Defaults to 550.
+    Returns
+    -------
+    List[List[dict]]
+        A list of lists, where each inner list is a chunk of work items.
+    """
+    chunks = []
+    for i in range(0, len(work_items), chunk_size):
+        chunk = work_items[i:i+chunk_size]
+        chunks.append(chunk)
+    return chunks
 
 def unzip_file(url: str) -> bytes:
     """
@@ -194,9 +213,11 @@ def update_progress_file(task_id, completed, failed_files):  # Write to progress
         "failed_files": failed_files
     }
     
-    local_path = "../data/nigeria_tifs/batch-logs"
+    temp_dir = "/tmp/batch-logs"
+    os.makedirs(temp_dir, exist_ok=True)
     file_name = f"{task_id}.json"
-    upload_file_path = os.path.join(local_path, file_name)
+    upload_file_path = os.path.join(temp_dir, file_name)
+    
     container_name = "batch-logs"
 
     with open(upload_file_path, 'w') as f:
@@ -257,10 +278,17 @@ def cleanup_local_files(file_paths: List[Tuple] | str):  # Delete local files af
         print(f"File '{j}' not found.")
     
 
-def process_batch_with_progress(work_items_chunk: List[dict], task_id: int):
+def process_batch_with_progress(work_items_chunk: List[dict]):
+    
+    # Get task ID from environment instead of parameter
+    task_id = os.environ.get('AZ_BATCH_TASK_ID', f'local_task_{int(time.time())}')
+    
+    # Use Batch VM working directory
+    directory = "/tmp/processing/"
+    os.makedirs(directory, exist_ok=True)
+    
     failed_files = []
     completed = []
-    directory = "../data/nigeria_tifs/" # hard coding this for local run
     
     processed_count = 0
     for i, item in enumerate(work_items_chunk):
