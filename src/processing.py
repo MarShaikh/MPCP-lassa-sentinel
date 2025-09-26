@@ -16,6 +16,10 @@ from rasterio.warp import transform_bounds
 from azure.storage.blob import BlobServiceClient
 from azure.identity import DefaultAzureCredential
 
+def get_task_id():
+    # in batch environment; add this before pushing it to batch
+    return os.environ.get('AZ_BATCH_TASK_ID', f'local_task_{int(time.time())}')
+
 def unzip_file(url: str) -> bytes:
     """
     Opens an object at a given url, and returns a decompressed byte object
