@@ -264,12 +264,17 @@ def process_batch_with_progress(work_items_chunk: List[dict], task_id: int):
             cog_container_name = "processed-cogs"
             raw_container_name = "raw-data"
             cog_file_path, cog_file_name, raw_file_path, raw_file_name = decompress_convert_to_cog(item, directory)
-            upload_blob_to_azure(container_name=cog_container_name, file_path=cog_file_path, file_name=cog_file_name)
-            upload_blob_to_azure(container_name=raw_container_name, file_path=raw_file_path, file_name=raw_file_name)
+
+            year = item['year']
+
+            upload_blob_to_azure(container_name=cog_container_name, file_path=cog_file_path, file_name=f"{year}/{cog_file_name}")
+            upload_blob_to_azure(container_name=raw_container_name, file_path=raw_file_path, file_name=f"{year}/{raw_file_name}")
+
             completed.append((cog_file_path, raw_file_path))
         except Exception as e:
             failed_files.append({"item": item, "Error": str(e)})
             print(f"Failed: {item} - Error: {str(e)}")
+            continue
 
         processed_count += 1
         
