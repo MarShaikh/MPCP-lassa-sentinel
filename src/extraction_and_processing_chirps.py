@@ -20,16 +20,8 @@ if __name__ == "__main__":
         urls = find_tiff_url(year, pattern = r"chirps-.*")
         data_urls.append({"year": str(i + 1981), "urls": urls})
     
-    # iterate through all the years, and convert to COGS
-    directory = "data/nigeria_tifs/"
     
-    # for parallel workflow, convert to a flat list from the nested data_urls list
-    # from concurrent.futures import ThreadPoolExecutor, as_completed
-    # import tqdm
-
     work_items = []
-    failed_files = []
-
     for data in data_urls:
         for url in data['urls']:
             work_items.append({"year": data['year'], "url": url})
@@ -62,7 +54,5 @@ if __name__ == "__main__":
     
     work_items_chunks = create_chunks(work_items)
 
-    failed_files = []
-    completed = []
     for task_id, work_items_chunk in enumerate(work_items_chunks[0:1]): # only processes 1 batch or 10 files
         process_batch_with_progress(work_items_chunk, task_id)
