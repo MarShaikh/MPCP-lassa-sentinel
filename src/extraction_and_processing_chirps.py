@@ -1,5 +1,6 @@
 from data_extraction import find_tiff_url
 from processing import process_batch_with_progress
+from typing import List
 
 if __name__ == "__main__":
 
@@ -34,8 +35,33 @@ if __name__ == "__main__":
             work_items.append({"year": data['year'], "url": url})
     
     # create chunks of data for processing
-    batch = 10
-    work_items_chunks = [work_items[i:i+batch] for i in range(0, len(work_items), batch)]
+    def create_chunks(work_items: List[dict], chunk_size: int = 550):
+        """
+        Splits a list of work items into smaller chunks for batch processing.
+
+        Parameters
+        ----------
+        work_items : List[dict]
+            A list of dictionaries, where each dictionary represents a work item
+            (e.g., containing 'year' and 'url' for a file to process).
+        chunk_size : int, optional
+            The maximum number of work items to include in each chunk.
+            Defaults to 550.
+
+        Returns
+        -------
+        List[List[dict]]
+            A list of lists, where each inner list is a chunk of work items.
+        """
+
+        chunks = []
+        for i in range(0, len(work_items), chunk_size):
+            chunk = work_items[i:i+chunk_size]
+            chunks.append(chunk)
+        return chunks
+    
+    work_items_chunks = create_chunks(work_items)
+
     failed_files = []
     completed = []
     for task_id, work_items_chunk in enumerate(work_items_chunks[0:1]): # only processes 1 batch or 10 files
