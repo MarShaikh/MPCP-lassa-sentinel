@@ -44,12 +44,12 @@ def create_and_submit_tasks(batch_client, job_id, work_items_chunks):
 
         # command to run on each VM
         command_line = (
-            "/bin/bash -c '" 
+            "/bin/bash -c '"
             "cd /tmp && "
-            "git clone <github repo> code && "
+            "git clone https://github.com/MarShaikh/MPCP-lassa-sentinel.git code && "
             "cd code && "
-            "pip install -r requirements.txt && "
-            "python batch_task_runner.py '"
+            "python3.11 -m pip install -r requirements.txt && "
+            "python3.11 src/batch_task_runner.py'"
         )
 
         # create task with environment variable
@@ -93,12 +93,12 @@ def main():
             work_items.append({"year": data['year'], "url": url})
     
     
-    work_items_chunks = create_chunks(work_items)
+    work_items_chunks = create_chunks(work_items[:1100])
 
     try:
         batch_client, job_id = create_batch_job()
         create_and_submit_tasks(batch_client, job_id, work_items_chunks)
-        print(f"Job '{job_id}' created with {len(work_items_chunks)} tasks")
+        print(f"Job '{job_id}' created with {len(work_items_chunks)} files")
     
     except Exception as e:
         print(f"Error: {e}")
