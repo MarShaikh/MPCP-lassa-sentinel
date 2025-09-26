@@ -38,5 +38,5 @@ if __name__ == "__main__":
     work_items_chunks = [work_items[i:i+batch] for i in range(0, len(work_items), batch)]
     failed_files = []
     completed = []
-    for task_id, work_items_chunk in enumerate(work_items_chunks[0:1]):
+    for task_id, work_items_chunk in enumerate(work_items_chunks[0:1]): # only processes 1 batch or 10 files
         process_batch_with_progress(work_items_chunk, task_id)
