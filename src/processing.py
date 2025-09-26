@@ -215,6 +215,7 @@ def update_progress_file(task_id, completed, failed_files):  # Write to progress
     
     temp_dir = "/tmp/batch-logs"
     os.makedirs(temp_dir, exist_ok=True)
+    
     file_name = f"{task_id}.json"
     upload_file_path = os.path.join(temp_dir, file_name)
     
