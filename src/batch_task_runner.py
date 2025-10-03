@@ -5,26 +5,30 @@ from typing import List, Dict
 
 from processing import process_batch_with_progress
 
-def get_work_items_from_environment() -> List[Dict]:
+def get_work_items_from_file() -> List[Dict]:
     """
-    Retrieves work items from the WORK_ITEMS_JSON environment variable
-    and parses them back into a list of dictionaries.
+    Reads work items from a JSON file in the task's working directory.
+    The file is downloaded by the Batch service via a ResourceFile.
     
     Returns
     -------
     List[dict]
         List of work items to process
     """
-    work_items_json = os.environ.get("WORK_ITEMS_JSON")
+     # AZ_BATCH_TASK_WORKING_DIR is a default environment variable set by Batch.
+    task_working_dir = os.environ.get("AZ_BATCH_TASK_WORKING_DIR")
+    file_path = os.path.join(task_working_dir, "work_items.json")
 
-    if not work_items_json:
-        raise ValueError("WORK_ITEMS_JSON environment variable not found.")
-    
-    try: 
-        work_items = json.loads(work_items_json)
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Work items file not found at: {file_path}")
+
+    try:
+        with open(file_path, 'r') as f:
+            work_items = json.load(f)
         return work_items
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Failed to parse WORK_ITEMS_JSON: {e}")
+    except (json.JSONDecodeError, IOError) as e:
+        raise ValueError(f"Failed to read or parse work_items.json: {e}")
+    
     
 def setup_working_directories():
     """
@@ -38,19 +42,15 @@ def setup_working_directories():
 def main():
     try:
         print("Starting batch task runner...")
-
-        # get task info
         task_id = os.environ.get('AZ_BATCH_TASK_ID', 'unknown_task')
         print(f"Task ID: {task_id}")
 
-        # setup working directories
         setup_working_directories()
+    
+        work_items = get_work_items_from_file()
+        
+        print(f"Processing {len(work_items)} files from resource file.")
 
-        # get work items
-        work_items = get_work_items_from_environment()
-        print(f"Processing {len(work_items)} files")
-
-        # Process the batch
         process_batch_with_progress(work_items)
 
         print(f"Task {task_id} completed successfully")

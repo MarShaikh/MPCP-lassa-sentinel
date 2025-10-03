@@ -1,6 +1,6 @@
 import json
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import os
 
 
@@ -8,10 +8,11 @@ from data_extraction import find_tiff_url
 from processing import create_chunks
 
 from azure.batch import  BatchServiceClient
-from azure.batch.models import JobAddParameter, PoolInformation, TaskAddParameter, EnvironmentSetting
+from azure.batch.models import JobAddParameter, PoolInformation, TaskAddParameter, ResourceFile
 from azure.batch.batch_auth import SharedKeyCredentials
 from azure.batch.custom.custom_errors import CreateTasksErrorException
-
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+from azure.identity import DefaultAzureCredential
 
 def create_batch_job():
     
@@ -39,15 +40,48 @@ def create_batch_job():
 
 
 def create_and_submit_tasks(batch_client, job_id, work_items_chunks):
+    """
+    Uploads task data to Azure Storage and submits tasks with ResourceFiles
+    """
     tasks = []
 
+    # setup Azure Storage
+    STORAGE_ACCOUNT_URL = os.environ["STORAGE_ACCOUNT_URL"]
+    CONTAINER_NAME = "task-data"
+    BATCH_STORAGE_ACCOUNT_KEY = os.environ["BATCH_STORAGE_ACCOUNT_KEY"]
+    
+    storage_credential = DefaultAzureCredential()
+    blob_service_client = BlobServiceClient(account_url=STORAGE_ACCOUNT_URL, credential=storage_credential)
+
     for i, chunk in enumerate(work_items_chunks):
-        task_id = f"task_{i:03d}"  # task_000, task_001, etc.
+        task_id = f"task{i:03d}"
 
-        # convert work items to JSON for environment variable
+        # upload work items to blob
         work_items_json = json.dumps(chunk)
+        blob_name = f"{job_id}/{task_id}_work_items.json"
+        
+        blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=blob_name)
+        blob_client.upload_blob(work_items_json.encode('utf-8'), overwrite=True)
+        print(f"Uploaded data for {task_id} to blob: {blob_name}")
 
-        # command to run on each VM
+        # creating SAS URL for batch nodes to get temp access to the file
+        sas_token = generate_blob_sas(
+            account_name=blob_service_client.account_name,
+            container_name=CONTAINER_NAME,
+            blob_name=blob_name,
+            account_key=BATCH_STORAGE_ACCOUNT_KEY,
+            permission=BlobSasPermissions(read=True),
+            expiry=datetime.now(timezone.utc) + timedelta(days=7)
+        )
+        blob_sas_url = f"{blob_client.url}?{sas_token}"
+
+        # create a resource file; this tells batch to download the file from the SAS url before running the command
+        # file path is the name it will have on the compute node
+        resource_file = ResourceFile(
+            http_url=blob_sas_url,
+            file_path=f"work_items.json"
+        )
+
         command_line = (
             "/bin/bash -c '"
             "cd /tmp && "
@@ -57,21 +91,18 @@ def create_and_submit_tasks(batch_client, job_id, work_items_chunks):
             "python3.11 src/batch_task_runner.py'"
         )
 
-        # create task with environment variable
         task = TaskAddParameter(
-            id = task_id, 
-            command_line = command_line,
-            environment_settings=[
-                EnvironmentSetting(name="WORK_ITEMS_JSON", value=work_items_json)
-            ]
+            id=task_id,
+            command_line=command_line,
+            resource_files=[resource_file]
         )
-        
         tasks.append(task)
-
+    
     # Submit all tasks at once
     print(f"Submitting {len(tasks)} tasks to job {job_id}")
     batch_client.task.add_collection(job_id, tasks)
     print("All tasks submitted successfully!")
+
 
 def main():
     # url to the file system
