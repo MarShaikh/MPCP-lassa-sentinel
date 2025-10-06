@@ -96,6 +96,7 @@ def create_and_submit_tasks(batch_client, job_id, work_items_chunks):
         command_line = (
             "/bin/bash -c '"
             "cd /tmp && "
+            "[ -d code ] && rm -rf code; "
             "git clone https://github.com/MarShaikh/MPCP-lassa-sentinel.git code && "
             "cd code && "
             "python3.11 -m pip install -r requirements.txt && "
