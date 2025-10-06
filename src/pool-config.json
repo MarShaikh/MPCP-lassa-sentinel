@@ -1,0 +1,23 @@
+{
+  "id": "geospatial-processing-pool",
+  "vmSize": "standard_d2s_v3",
+  "virtualMachineConfiguration": {
+    "imageReference": {
+      "publisher": "canonical",
+      "offer": "0001-com-ubuntu-server-jammy",
+      "sku": "22_04-lts"
+    },
+    "nodeAgentSKUId": "batch.node.ubuntu 22.04"
+  },
+  "targetDedicatedNodes": 3,
+  "startTask": {
+    "commandLine": "/bin/bash -c 'apt-get update && apt-get install -y software-properties-common git curl && add-apt-repository -y ppa:deadsnakes/ppa && apt-get update && apt-get install -y python3.11 python3.11-venv python3.11-dev && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11'",
+    "userIdentity": {
+      "autoUser": {
+        "elevationLevel": "admin",
+        "scope": "pool"
+      }
+    },
+    "waitForSuccess": true
+  }
+}
