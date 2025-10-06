@@ -180,7 +180,7 @@ def main():
         return
     
     
-    work_items_chunks = create_chunks(work_items[:1100])
+    work_items_chunks = create_chunks(work_items)
     
     print(f"Created {len(work_items_chunks)} chunks to be submitted as tasks.")
     if not work_items_chunks:
