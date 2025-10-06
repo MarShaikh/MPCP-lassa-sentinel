@@ -7,3 +7,4 @@ tqdm>=4.66.0
 pystac>=1.8.0
 planetary-computer>=1.0.0
 cryptography>=41.0.0
+azure-identity>=1.23.0
