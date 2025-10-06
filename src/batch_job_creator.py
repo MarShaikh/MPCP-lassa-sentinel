@@ -124,10 +124,10 @@ def create_and_submit_tasks(batch_client, job_id, work_items_chunks):
 
         command_line = (
             "/bin/bash -c '"
-            f"export STORAGE_ACCOUNT_URL={STORAGE_ACCOUNT_URL} && "
-            f"export COG_CONTAINER_SAS={cog_sas} && "
-            f"export RAW_CONTAINER_SAS={raw_sas} && "
-            f"export LOGS_CONTAINER_SAS={logs_sas} && "
+            "export STORAGE_ACCOUNT_URL=\"" + STORAGE_ACCOUNT_URL + "\" && "
+            "export COG_CONTAINER_SAS=\"" + cog_sas + "\" && "
+            "export RAW_CONTAINER_SAS=\"" + raw_sas + "\" && "
+            "export LOGS_CONTAINER_SAS=\"" + logs_sas + "\" && "
             "cd /tmp && "
             "[ -d code ] && rm -rf code; "
             "git clone https://github.com/MarShaikh/MPCP-lassa-sentinel.git code && "
