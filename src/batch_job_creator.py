@@ -58,11 +58,40 @@ def create_and_submit_tasks(batch_client, job_id, work_items_chunks):
 
     # setup Azure Storage
     STORAGE_ACCOUNT_URL = os.environ["STORAGE_ACCOUNT_URL"]
+    STORAGE_ACCOUNT_NAME = STORAGE_ACCOUNT_URL.split("//")[1].split(".")[0]
     CONTAINER_NAME = "task-data"
     BATCH_STORAGE_ACCOUNT_KEY = os.environ["BATCH_STORAGE_ACCOUNT_KEY"]
     
     storage_credential = DefaultAzureCredential()
     blob_service_client = BlobServiceClient(account_url=STORAGE_ACCOUNT_URL, credential=storage_credential)
+
+    # Generate SAS tokens for output containers (valid for 7 days)
+    cog_sas = generate_blob_sas(
+        account_name=STORAGE_ACCOUNT_NAME,
+        container_name="processed-cogs",
+        blob_name="",  # Container-level SAS
+        account_key=BATCH_STORAGE_ACCOUNT_KEY,
+        permission=BlobSasPermissions(read=True, write=True, create=True),
+        expiry=datetime.now(timezone.utc) + timedelta(days=7)
+    )
+
+    raw_sas = generate_blob_sas(
+        account_name=STORAGE_ACCOUNT_NAME,
+        container_name="raw-data",
+        blob_name="",
+        account_key=BATCH_STORAGE_ACCOUNT_KEY,
+        permission=BlobSasPermissions(read=True, write=True, create=True),
+        expiry=datetime.now(timezone.utc) + timedelta(days=7)
+    )
+
+    logs_sas = generate_blob_sas(
+        account_name=STORAGE_ACCOUNT_NAME,
+        container_name="batch-logs",
+        blob_name="",
+        account_key=BATCH_STORAGE_ACCOUNT_KEY,
+        permission=BlobSasPermissions(read=True, write=True, create=True),
+        expiry=datetime.now(timezone.utc) + timedelta(days=7)
+    )
 
     for i, chunk in enumerate(work_items_chunks):
         task_id = f"task{i:03d}"
@@ -77,7 +106,7 @@ def create_and_submit_tasks(batch_client, job_id, work_items_chunks):
 
         # creating SAS URL for batch nodes to get temp access to the file
         sas_token = generate_blob_sas(
-            account_name=blob_service_client.account_name,
+            account_name=STORAGE_ACCOUNT_NAME,
             container_name=CONTAINER_NAME,
             blob_name=blob_name,
             account_key=BATCH_STORAGE_ACCOUNT_KEY,
@@ -95,6 +124,10 @@ def create_and_submit_tasks(batch_client, job_id, work_items_chunks):
 
         command_line = (
             "/bin/bash -c '"
+            f"export STORAGE_ACCOUNT_URL={STORAGE_ACCOUNT_URL} && "
+            f"export COG_CONTAINER_SAS={cog_sas} && "
+            f"export RAW_CONTAINER_SAS={raw_sas} && "
+            f"export LOGS_CONTAINER_SAS={logs_sas} && "
             "cd /tmp && "
             "[ -d code ] && rm -rf code; "
             "git clone https://github.com/MarShaikh/MPCP-lassa-sentinel.git code && "

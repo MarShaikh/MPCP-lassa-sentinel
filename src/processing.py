@@ -14,7 +14,6 @@ from rasterio.crs import CRS
 from rasterio.warp import transform_bounds
 
 from azure.storage.blob import BlobServiceClient
-from azure.identity import DefaultAzureCredential
 
 # create chunks of data for processing
 def create_chunks(work_items: List[dict], chunk_size: int = 550):
@@ -249,20 +248,28 @@ def upload_blob_to_azure(container_name: str, file_path: str, file_name: str):
     None
     """
     
-    # uses the default credential option on this machine
-    credential = DefaultAzureCredential()
-
-    # Create blob service client
+    storage_account_url = os.environ["STORAGE_ACCOUNT_URL"]
+    
+    # Get the appropriate SAS token based on container
+    if container_name == "processed-cogs":
+        sas_token = os.environ["COG_CONTAINER_SAS"]
+    elif container_name == "raw-data":
+        sas_token = os.environ["RAW_CONTAINER_SAS"]
+    elif container_name == "batch-logs":
+        sas_token = os.environ["LOGS_CONTAINER_SAS"]
+    else:
+        raise ValueError(f"Unknown container: {container_name}")
+    
+    # Create blob service client with SAS token
     blob_service_client = BlobServiceClient(
-        account_url="https://mpcpstorageaccount.blob.core.windows.net",
-        credential=credential
+        account_url=f"{storage_account_url}?{sas_token}"
     )
     
-    blob_client = blob_service_client.get_blob_client(container = container_name, blob=file_name)
+    blob_client = blob_service_client.get_blob_client(container=container_name, blob=file_name)
     
-    print(f"\nUploading to Azure as blob:\n\t" + file_path)
-    with open(file = file_path, mode = "rb") as data:
-        blob_client.upload_blob(data)    
+    print(f"\nUploading to Azure as blob:\n\t{file_path}")
+    with open(file=file_path, mode="rb") as data:
+        blob_client.upload_blob(data, overwrite=True)
 
 def cleanup_local_files(file_paths: List[Tuple] | str):  # Delete local files after uploading them to Azure Blob
     try:
