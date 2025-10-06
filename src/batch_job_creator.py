@@ -11,7 +11,7 @@ from azure.batch import  BatchServiceClient
 from azure.batch.models import JobAddParameter, PoolInformation, TaskAddParameter, ResourceFile
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.batch.custom.custom_errors import CreateTasksErrorException
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+from azure.storage.blob import BlobServiceClient, generate_blob_sas, generate_container_sas, BlobSasPermissions, ContainerSasPermissions
 from azure.identity import DefaultAzureCredential
 
 def create_batch_job():
@@ -66,30 +66,27 @@ def create_and_submit_tasks(batch_client, job_id, work_items_chunks):
     blob_service_client = BlobServiceClient(account_url=STORAGE_ACCOUNT_URL, credential=storage_credential)
 
     # Generate SAS tokens for output containers (valid for 7 days)
-    cog_sas = generate_blob_sas(
+    cog_sas = generate_container_sas(
         account_name=STORAGE_ACCOUNT_NAME,
         container_name="processed-cogs",
-        blob_name="",  # Container-level SAS
         account_key=BATCH_STORAGE_ACCOUNT_KEY,
-        permission=BlobSasPermissions(read=True, write=True, create=True),
+        permission=ContainerSasPermissions(read=True, write=True, create=True, list=True),
         expiry=datetime.now(timezone.utc) + timedelta(days=7)
     )
 
-    raw_sas = generate_blob_sas(
+    raw_sas = generate_container_sas(
         account_name=STORAGE_ACCOUNT_NAME,
         container_name="raw-data",
-        blob_name="",
         account_key=BATCH_STORAGE_ACCOUNT_KEY,
-        permission=BlobSasPermissions(read=True, write=True, create=True),
+        permission=ContainerSasPermissions(read=True, write=True, create=True, list=True),
         expiry=datetime.now(timezone.utc) + timedelta(days=7)
     )
 
-    logs_sas = generate_blob_sas(
+    logs_sas = generate_container_sas(
         account_name=STORAGE_ACCOUNT_NAME,
         container_name="batch-logs",
-        blob_name="",
         account_key=BATCH_STORAGE_ACCOUNT_KEY,
-        permission=BlobSasPermissions(read=True, write=True, create=True),
+        permission=ContainerSasPermissions(read=True, write=True, create=True, list=True),
         expiry=datetime.now(timezone.utc) + timedelta(days=7)
     )
 
