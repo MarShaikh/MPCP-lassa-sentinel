@@ -1,4 +1,3 @@
-# to be run locally
 import json
 import time
 from datetime import datetime, timedelta
@@ -29,17 +28,21 @@ class ProgressMonitor:
         
         try:
             container_client = self.blob_service_client.get_container_client(self.container_name)
-            blob_list = container_client.list_blobs(name_starts_with="task_")
+            blob_list = container_client.list_blobs()
             
             for blob in blob_list:
-                if blob.name.endswith('.json'):
-                    blob_client = container_client.get_blob_client(blob.name)
-                    content = blob_client.download_blob().readall()
-                    task_data = json.loads(content)
-                    progress_data.append(task_data)
+                if blob.name.startswith('task') and blob.name.endswith('.json'):
+                    try:
+                        blob_client = container_client.get_blob_client(blob.name)
+                        content = blob_client.download_blob().readall()
+                        task_data = json.loads(content)
+                        progress_data.append(task_data)
+                        print(f"Loaded progress file: {blob.name}")
+                    except Exception as e:
+                        print(f"Error reading {blob.name}: {e}")
                     
         except Exception as e:
-            print(f"Error reading progress files: {e}")
+            print(f"Error accessing container: {e}")
             
         return progress_data
 
@@ -60,27 +63,34 @@ class ProgressMonitor:
         total_completed = 0
         total_failed = 0
         active_tasks = 0
-        completed_tasks = 0
-        failed_tasks = 0
         stuck_tasks = []
         
         current_time = datetime.now()
         
         for task in progress_data:
-            total_completed += task.get('completed', 0)
-            total_failed += len(task.get('failed_files', []))
+            # Get the completed count (number of successfully processed files)
+            completed = task.get('completed', 0)
+            total_completed += completed
             
-            # Check task status
-            last_update = datetime.fromisoformat(task.get('iso_timestamp', current_time.isoformat()))
-            time_since_update = current_time - last_update
+            # Count failed files
+            failed = task.get('failed_files', [])
+            total_failed += len(failed)
             
-            if time_since_update > timedelta(minutes=30):  # No update in 30 minutes
-                stuck_tasks.append(task.get('batch_number', 'unknown'))
-            else:
-                active_tasks += 1
+            # Check task status based on last update time
+            last_update_str = task.get('iso_timestamp', current_time.isoformat())
+            try:
+                last_update = datetime.fromisoformat(last_update_str)
+                time_since_update = current_time - last_update
+                
+                if time_since_update > timedelta(minutes=30):
+                    stuck_tasks.append(task.get('batch_number', 'unknown'))
+                else:
+                    active_tasks += 1
+            except Exception:
+                pass
         
-        # Estimate total files (assuming 550 per task for most tasks)
-        estimated_total = len(progress_data) * 550  # Rough estimate
+        # Estimate total files (550 per task)
+        estimated_total = len(progress_data) * 550
         
         return {
             'total_completed': total_completed,
@@ -88,8 +98,6 @@ class ProgressMonitor:
             'estimated_total': estimated_total,
             'completion_percentage': (total_completed / estimated_total * 100) if estimated_total > 0 else 0,
             'active_tasks': active_tasks,
-            'completed_tasks': completed_tasks,
-            'failed_tasks': failed_tasks,
             'stuck_tasks': stuck_tasks,
             'total_tasks': len(progress_data)
         }
@@ -114,11 +122,6 @@ class ProgressMonitor:
     def monitor_continuously(self, interval_minutes: int = 5):
         """
         Monitors progress continuously with specified interval
-        
-        Parameters
-        ----------
-        interval_minutes : int
-            Minutes between progress checks
         """
         print(f"Starting continuous monitoring (checking every {interval_minutes} minutes)")
         print("Press Ctrl+C to stop")
