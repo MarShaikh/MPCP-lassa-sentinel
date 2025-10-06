@@ -9,19 +9,30 @@ from processing import create_chunks
 
 from azure.batch import  BatchServiceClient
 from azure.batch.models import JobAddParameter, PoolInformation, TaskAddParameter, ResourceFile
-from azure.batch.batch_auth import SharedKeyCredentials
+from azure.common.credentials import ServicePrincipalCredentials
 from azure.batch.custom.custom_errors import CreateTasksErrorException
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
 from azure.identity import DefaultAzureCredential
 
 def create_batch_job():
     
-    BATCH_ACCOUNT_NAME = os.environ["BATCH_ACCOUNT_NAME"]
-    BATCH_ACCOUNT_KEY = os.environ["BATCH_ACCOUNT_KEY"]
+    TENANT_ID = os.environ["AZURE_TENANT_ID"]
+    CLIENT_ID = os.environ["AZURE_CLIENT_ID"]
+    CLIENT_SECRET = os.environ["AZURE_CLIENT_SECRET"]
     BATCH_ACCOUNT_URL = os.environ["BATCH_ACCOUNT_URL"]
-    credentials = SharedKeyCredentials(BATCH_ACCOUNT_NAME, BATCH_ACCOUNT_KEY)
-
-    batch_client = BatchServiceClient(credentials, batch_url=BATCH_ACCOUNT_URL)
+    RESOURCE = "https://batch.core.windows.net/"
+    
+    credentials = ServicePrincipalCredentials(
+        client_id=CLIENT_ID,
+        secret=CLIENT_SECRET,
+        tenant=TENANT_ID,
+        resource=RESOURCE
+    )
+    
+    batch_client = BatchServiceClient(
+        credentials,
+        batch_url=BATCH_ACCOUNT_URL
+    )
 
     # create a unique job ID with timestamp
     job_id = f"chirps-processing-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
