@@ -54,9 +54,13 @@ def unzip_file(url: str) -> bytes:
     """
     unzipped_file = requests.get(url) 
     if unzipped_file.status_code == 200:
-        decompressed_file = gzip.decompress(unzipped_file.content)
+        if ".gz" in url:
+            output_file = gzip.decompress(unzipped_file.content)
+        else:
+            # some files are annoyingly not zipped
+            output_file = unzipped_file.content
     
-    return decompressed_file
+    return output_file
 
 
 def clip_to_cog(input_tiff: str, clipped_tiff: str, bbox: list, bbox_crs: str):
