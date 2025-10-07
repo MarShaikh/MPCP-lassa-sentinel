@@ -299,8 +299,12 @@ def process_batch_with_progress(work_items_chunk: List[dict]):
     directory = "/tmp/processing/"
     os.makedirs(directory, exist_ok=True)
     
+    # progress reporting vars: 
     failed_files = []
-    completed = []
+    completed = [] 
+    
+    # adding clean up var
+    cleanup = [] 
     
     processed_count = 0
     for i, item in enumerate(work_items_chunk):
@@ -314,7 +318,8 @@ def process_batch_with_progress(work_items_chunk: List[dict]):
             upload_blob_to_azure(container_name=cog_container_name, file_path=cog_file_path, file_name=f"{year}/{cog_file_name}")
             upload_blob_to_azure(container_name=raw_container_name, file_path=raw_file_path, file_name=f"{year}/{raw_file_name}")
 
-            completed.append((cog_file_path, raw_file_path))
+            completed.append((cog_file_path, raw_file_path)) # progress tracking
+            cleanup.append((cog_file_path, raw_file_path)) # cleanup files
         except Exception as e:
             failed_files.append({"item": item, "Error": str(e)})
             print(f"Failed: {item} - Error: {str(e)}")
@@ -325,4 +330,7 @@ def process_batch_with_progress(work_items_chunk: List[dict]):
         if processed_count % 10 == 0 or i == len(work_items_chunk) - 1:
             print(f"Task ID: {task_id}, Completed: {completed}, Failed Files: {failed_files}")
             update_progress_file(task_id, len(completed), failed_files)
-            cleanup_local_files(completed)
+            if cleanup: 
+                cleanup_local_files(cleanup)
+                cleanup.clear()
+            
