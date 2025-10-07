@@ -5,8 +5,8 @@ from typing import List
 import os
 
 
-from data_extraction import find_tiff_url
-from processing import create_chunks
+from src.batch_processing.data_extraction import find_tiff_url
+from src.batch_processing.processing import create_chunks
 
 from azure.batch import  BatchServiceClient
 from azure.batch.models import JobAddParameter, PoolInformation, TaskAddParameter, ResourceFile

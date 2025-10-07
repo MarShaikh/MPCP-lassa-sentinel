@@ -3,7 +3,7 @@ import json
 import sys
 from typing import List, Dict
 
-from processing import process_batch_with_progress
+from src.batch_processing.processing import process_batch_with_progress
 
 def get_work_items_from_file() -> List[Dict]:
     """
