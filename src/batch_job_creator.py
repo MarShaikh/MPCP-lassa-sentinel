@@ -1,6 +1,7 @@
 import json
 import traceback
 from datetime import datetime, timedelta, timezone
+from typing import List
 import os
 
 
@@ -145,6 +146,58 @@ def create_and_submit_tasks(batch_client, job_id, work_items_chunks):
     batch_client.task.add_collection(job_id, tasks)
     print("All tasks submitted successfully!")
 
+def filter_existing_work_items(work_items: List[dict]) -> List[dict]:
+    """
+    Filter out work items whose COG files already exist in processed-cogs container.
+    
+    Parameters
+    ----------
+    work_items : List[dict]
+        List of work items with 'year' and 'url' keys
+    
+    Returns
+    -------
+    List[dict]
+        Filtered list of work items that need processing (COGs don't exist yet)
+    """
+    try:
+        # Setup Azure Storage connection
+        STORAGE_ACCOUNT_URL = os.environ["STORAGE_ACCOUNT_URL"]
+        storage_credential = DefaultAzureCredential()
+        blob_service_client = BlobServiceClient(account_url=STORAGE_ACCOUNT_URL, credential=storage_credential)
+        
+        # Get container client and list all existing COGs
+        container_client = blob_service_client.get_container_client("processed-cogs")
+        existing_cogs = {blob.name for blob in container_client.list_blobs()}
+        
+        print(f"Found {len(existing_cogs)} existing COG files in processed-cogs container")
+        
+        # Filter work items
+        filtered_work_items = []
+        for work_item in work_items:
+            year = work_item['year']
+            url = work_item['url']
+            year_dir = str(year) + "/"
+            
+            # Predict the blob path (same logic as processing.py)
+            raw_file_name = url.split(year_dir)[1].replace(".gz", "")
+            cog_file_name = f"nigeria-cog-{raw_file_name}"
+            blob_path = f"{year}/{cog_file_name}"
+            
+            # Keep only if it doesn't exist
+            if blob_path not in existing_cogs:
+                filtered_work_items.append(work_item)
+        
+        filtered_out_count = len(work_items) - len(filtered_work_items)
+        print(f"Filtered out {filtered_out_count} work items that already exist")
+        print(f"{len(filtered_work_items)} work items remain to process")
+        
+        return filtered_work_items
+        
+    except Exception as e:
+        print(f"Failed to filter work items: {e}")
+        traceback.print_exc()
+        raise
 
 def main():
     # url to the file system
@@ -179,8 +232,14 @@ def main():
         print("Stopping script because no work items were generated from the URLs.")
         return
     
+    # Filter out existing COGs
+    filtered_work_items = filter_existing_work_items(work_items)
     
-    work_items_chunks = create_chunks(work_items)
+    if not filtered_work_items:
+        print("All work items already processed! No new job needed.")
+        return
+    
+    work_items_chunks = create_chunks(filtered_work_items)
     
     print(f"Created {len(work_items_chunks)} chunks to be submitted as tasks.")
     if not work_items_chunks:
