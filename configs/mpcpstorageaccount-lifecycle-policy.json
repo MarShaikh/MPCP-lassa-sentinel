@@ -1,0 +1,29 @@
+{
+  "rules": [
+    {
+      "enabled": true,
+      "name": "tiering-rule",
+      "type": "Lifecycle",
+      "definition": {
+        "actions": {
+          "baseBlob": {
+            "tierToCool": {
+              "daysAfterModificationGreaterThan": 120
+            },
+            "tierToCold": {
+              "daysAfterModificationGreaterThan": 240
+            },
+            "tierToArchive": {
+              "daysAfterModificationGreaterThan": 360
+            }
+          }
+        },
+        "filters": {
+          "blobTypes": [
+            "blockBlob"
+          ]
+        }
+      }
+    }
+  ]
+}
