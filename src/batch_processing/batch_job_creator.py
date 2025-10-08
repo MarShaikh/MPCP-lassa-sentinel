@@ -179,7 +179,7 @@ def filter_existing_work_items(work_items: List[dict]) -> List[dict]:
             url = work_item['url']
             year_dir = str(year) + "/"
             
-            # Predict the blob path (same logic as processing.py)
+            # Predict the blob path
             raw_file_name = url.split(year_dir)[1].replace(".gz", "")
             cog_file_name = f"nigeria-cog-{raw_file_name}"
             blob_path = f"{year}/{cog_file_name}"
