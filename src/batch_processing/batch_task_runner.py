@@ -15,7 +15,7 @@ def get_work_items_from_file() -> List[Dict]:
     List[dict]
         List of work items to process
     """
-     # AZ_BATCH_TASK_WORKING_DIR is a default environment variable set by Batch.
+    # AZ_BATCH_TASK_WORKING_DIR is a default environment variable set by Batch.
     task_working_dir = os.environ.get("AZ_BATCH_TASK_WORKING_DIR")
     file_path = os.path.join(task_working_dir, "work_items.json")
 
