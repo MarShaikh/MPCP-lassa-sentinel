@@ -301,7 +301,6 @@ def main():
         
         # Create chunks for batch processing
         work_items_chunks = create_chunks(filtered_work_items, chunk_size=100)
-        print(work_items_chunks)
 
         print(f"Created {len(work_items_chunks)} chunks to be submitted as tasks.")
         
