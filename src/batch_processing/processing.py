@@ -59,8 +59,9 @@ def unzip_file(url: str) -> bytes:
         else:
             # some files are annoyingly not zipped
             output_file = unzipped_file.content
-    
-    return output_file
+        return output_file
+    else:
+        raise Exception(f"Failed to download file from {url}. Status code: {unzipped_file.status_code}")
 
 
 def clip_to_cog(input_tiff: str, clipped_tiff: str, bbox: list, bbox_crs: str):
@@ -275,19 +276,27 @@ def upload_blob_to_azure(container_name: str, file_path: str, file_name: str):
     with open(file=file_path, mode="rb") as data:
         blob_client.upload_blob(data, overwrite=True)
 
-def cleanup_local_files(file_paths: List[Tuple] | str):  # Delete local files after uploading them to Azure Blob
-    try:
-        if type(file_paths) == str:
+def cleanup_local_files(file_paths: List[Tuple] | str):
+    """Delete local files after uploading them to Azure Blob"""
+    if type(file_paths) == str:
+        try:
             os.remove(file_paths)
             print(f"Local {file_paths} removed")
-        else:
-            for (i, j) in file_paths:
-                os.remove(i) # processed file
-                os.remove(j) # raw file
-                print(f"Local raw file removed: {i} and COG file: {j} removed.")
-    except FileNotFoundError:
-        print(f"File '{i}' not found.")
-        print(f"File '{j}' not found.")
+        except FileNotFoundError:
+            print(f"File '{file_paths}' not found.")
+    else:
+        for (i, j) in file_paths:
+            try:
+                os.remove(i)  # processed file
+                print(f"Local raw file removed: {i}")
+            except FileNotFoundError:
+                print(f"File '{i}' not found.")
+            
+            try:
+                os.remove(j)  # COG file
+                print(f"COG file removed: {j}")
+            except FileNotFoundError:
+                print(f"File '{j}' not found.")
     
 
 def process_batch_with_progress(work_items_chunk: List[dict]):
