@@ -196,7 +196,7 @@ class TestCreateStacItemFromCog:
         assert properties['file:size'] == 2048000
     
     @patch('src.stac_conversion.MemoryFile')
-    def test_create_stac_item_blob_download_failure(self):
+    def test_create_stac_item_blob_download_failure(self, mock_memory_file):
         """Test handling of blob download failure."""
         mock_blob_client = MagicMock()
         mock_blob_client.download_blob.side_effect = Exception("Blob not found")
@@ -206,17 +206,17 @@ class TestCreateStacItemFromCog:
                 mock_blob_client, "test.tif", "https://test.url", "cogs", "1981"
             )
     
-    @patch('src.stac_conversion.create_stac_item')
-    @patch('src.stac_conversion.MemoryFile')
-    def test_create_stac_item_rasterio_failure(self, mock_memory_file):
+    @patch('src.stac_conversion.create_stac_item') 
+    @patch('src.stac_conversion.MemoryFile')        
+    def test_create_stac_item_rasterio_failure(self, mock_memory_file, mock_create_stac_item):
         """Test handling of rasterio processing failure."""
         mock_blob_client = MagicMock()
         mock_blob_client.download_blob.return_value.readall.return_value = b'data'
         mock_blob_client.get_blob_properties.return_value.size = 1000
-        
+
         # Make MemoryFile raise an exception
         mock_memory_file.side_effect = Exception("Invalid TIFF data")
-        
+
         with pytest.raises(Exception, match="Failed to create STAC item"):
             create_stac_item_from_cog_chirps(
                 mock_blob_client, "test.tif", "https://test.url", "cogs", "1981"
