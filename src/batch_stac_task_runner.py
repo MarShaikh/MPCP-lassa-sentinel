@@ -13,7 +13,12 @@ from azure.storage.blob import BlobServiceClient, ContainerClient
 from azure.identity import DefaultAzureCredential
 
 # Import the STAC conversion functions
-from stac_conversion import process_cog_to_stac, save_stac_item_to_blob
+# Try importing from the installed package structure first (for tests)
+try:
+    from src.stac_conversion import process_cog_to_stac, save_stac_item_to_blob
+except ImportError:
+    # Fall back to direct import (for Azure Batch execution)
+    from stac_conversion import process_cog_to_stac, save_stac_item_to_blob
 
 
 def get_work_items_from_file() -> List[Dict]:
@@ -160,8 +165,8 @@ def process_batch_with_progress(work_items: List[Dict]):
         if (i + 1) % 10 == 0 or i == len(work_items) - 1:
             update_progress_file(
                 task_id=task_id,
-                completed=completed,
-                failed=failed,
+                completed=completed.copy(), # Create a snapshot
+                failed=failed.copy(),       # Create a snapshot
                 total=len(work_items),
                 storage_account_url=storage_account_url,
                 logs_sas=logs_sas
