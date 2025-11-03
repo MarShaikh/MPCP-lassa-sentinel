@@ -200,3 +200,82 @@ def mock_stac_item():
         },
         "links": []
     }
+
+@pytest.fixture
+def sample_stac_work_items():
+    """Create sample work items for STAC processing (includes COG metadata)."""
+    return [
+        {
+            'year': '1981',
+            'filename': 'nigeria-cog-chirps-v2.0.1981.01.01.tif',
+            'blob_path': '1981/nigeria-cog-chirps-v2.0.1981.01.01.tif'
+        },
+        {
+            'year': '1981',
+            'filename': 'nigeria-cog-chirps-v2.0.1981.01.02.tif',
+            'blob_path': '1981/nigeria-cog-chirps-v2.0.1981.01.02.tif'
+        },
+        {
+            'year': '1981',
+            'filename': 'nigeria-cog-chirps-v2.0.1981.01.03.tif',
+            'blob_path': '1981/nigeria-cog-chirps-v2.0.1981.01.03.tif'
+        }
+    ]
+
+
+@pytest.fixture
+def mock_batch_stac_env(temp_dir, sample_stac_work_items):
+    """Mock environment variables for STAC batch task execution."""
+    env_vars = {
+        'AZ_BATCH_TASK_ID': 'stac_test_task_001',
+        'AZ_BATCH_TASK_WORKING_DIR': temp_dir,
+        'STORAGE_ACCOUNT_URL': 'http://127.0.0.1:10000/devstoreaccount1',
+        'COG_CONTAINER_SAS': 'mock_cog_sas_token',
+        'STAC_CONTAINER_SAS': 'mock_stac_sas_token',
+        'LOGS_CONTAINER_SAS': 'mock_logs_sas_token'
+    }
+    
+    with patch.dict(os.environ, env_vars, clear=False):
+        yield env_vars
+
+
+@pytest.fixture
+def mock_stac_azure_env():
+    """Mock Azure environment variables for STAC processing (without temp_dir dependency)."""
+    env_vars = {
+        'AZ_BATCH_TASK_ID': 'stac_test_task_001',
+        'STORAGE_ACCOUNT_URL': 'http://127.0.0.1:10000/devstoreaccount1',
+        'COG_CONTAINER_SAS': 'mock_cog_sas_token',
+        'STAC_CONTAINER_SAS': 'mock_stac_sas_token',
+        'LOGS_CONTAINER_SAS': 'mock_logs_sas_token'
+    }
+    
+    with patch.dict(os.environ, env_vars):
+        yield env_vars
+
+
+@pytest.fixture
+def stac_work_items_json_file(temp_dir, sample_stac_work_items):
+    """Create a work_items.json file for STAC processing in temp directory."""
+    file_path = os.path.join(temp_dir, "work_items.json")
+    with open(file_path, 'w') as f:
+        json.dump(sample_stac_work_items, f)
+    yield file_path
+
+
+@pytest.fixture
+def empty_stac_work_items_file(temp_dir):
+    """Create an empty work_items.json file."""
+    file_path = os.path.join(temp_dir, "work_items.json")
+    with open(file_path, 'w') as f:
+        json.dump([], f)
+    yield file_path
+
+
+@pytest.fixture
+def malformed_stac_json_file(temp_dir):
+    """Create a malformed JSON file."""
+    file_path = os.path.join(temp_dir, "work_items.json")
+    with open(file_path, 'w') as f:
+        f.write("{invalid json content")
+    yield file_path
