@@ -95,32 +95,37 @@ class TestSetupWorkingDirectories:
     
     def test_creates_all_directories(self):
         """Test that all required directories are created."""
-        base_dir = setup_working_directories()
-        
+        base_dir = "/tmp/stac_processing"
+        dirs_to_create = [
+            os.path.join(base_dir, "stac-items"),
+            "/tmp/batch-logs"
+        ]
+        setup_working_directories(dirs_to_create)
+
         # Check that directories exist
-        assert os.path.exists(base_dir)
         assert os.path.exists(os.path.join(base_dir, "stac-items"))
         assert os.path.exists("/tmp/batch-logs")
-        
+
         # Check that they are directories
-        assert os.path.isdir(base_dir)
         assert os.path.isdir(os.path.join(base_dir, "stac-items"))
         assert os.path.isdir("/tmp/batch-logs")
-        
-        # Verify base_dir is returned
-        assert base_dir == "/tmp/stac_processing"
     
     def test_handles_existing_directories(self):
         """Test that function doesn't fail if directories already exist."""
+        base_dir = "/tmp/stac_processing"
+        dirs_to_create = [
+            os.path.join(base_dir, "stac-items"),
+            "/tmp/batch-logs"
+        ]
+
         # Create directories first
-        base_dir1 = setup_working_directories()
-        
+        setup_working_directories(dirs_to_create)
+
         # Call again - should not raise error
-        base_dir2 = setup_working_directories()
-        
-        # Verify they still exist and are the same
-        assert base_dir1 == base_dir2
-        assert os.path.exists(os.path.join(base_dir2, "stac-items"))
+        setup_working_directories(dirs_to_create)
+
+        # Verify they still exist
+        assert os.path.exists(os.path.join(base_dir, "stac-items"))
         assert os.path.exists("/tmp/batch-logs")
 
 
@@ -276,13 +281,13 @@ class TestUpdateProgressFile:
         logs_sas = 'test_sas_token'
         
         # Mock BlobServiceClient to use real Azurite
-        with patch('src.batch_stac_task_runner.BlobServiceClient') as mock_bs:
+        with patch('src.utils.batch_task_utils.BlobServiceClient') as mock_bs:
             real_blob_service = azurite_setup
             mock_bs.return_value = real_blob_service
-            
+
             # Execute
-            update_progress_file(task_id, completed, failed, total, 
-                               storage_account_url, logs_sas)
+            update_progress_file(task_id, completed, failed, total,
+                               storage_account_url, logs_sas, progress_file_prefix="stac_")
         
         # Verify blob was uploaded to Azurite
         blob_client = real_blob_service.get_blob_client(
@@ -307,12 +312,12 @@ class TestUpdateProgressFile:
         """Test progress file with empty completed and failed lists."""
         task_id = 'stac_test_empty'
         
-        with patch('src.batch_stac_task_runner.BlobServiceClient') as mock_bs:
+        with patch('src.utils.batch_task_utils.BlobServiceClient') as mock_bs:
             real_blob_service = azurite_setup
             mock_bs.return_value = real_blob_service
-            
-            update_progress_file(task_id, [], [], 0, 
-                               os.environ['STORAGE_ACCOUNT_URL'], 'sas')
+
+            update_progress_file(task_id, [], [], 0,
+                               os.environ['STORAGE_ACCOUNT_URL'], 'sas', progress_file_prefix="stac_")
         
         blob_client = real_blob_service.get_blob_client(
             container='batch-logs',

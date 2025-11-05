@@ -408,8 +408,8 @@ class TestFilterExistingStacItems(TestBatchStacJobCreatorIntegration):
 class TestCreateBatchJob(TestBatchStacJobCreatorIntegration):
     """Tests for create_batch_job function."""
     
-    @patch('src.batch_stac_job_creator.BatchServiceClient')
-    @patch('src.batch_stac_job_creator.ServicePrincipalCredentials')
+    @patch('src.utils.azure_batch_utils.BatchServiceClient')
+    @patch('src.utils.azure_batch_utils.ServicePrincipalCredentials')
     def test_create_batch_job_success(
         self, mock_credentials, mock_batch_service, mock_batch_env_vars
     ):
@@ -441,8 +441,8 @@ class TestCreateBatchJob(TestBatchStacJobCreatorIntegration):
         
         assert batch_client == mock_batch_client
     
-    @patch('src.batch_stac_job_creator.BatchServiceClient')
-    @patch('src.batch_stac_job_creator.ServicePrincipalCredentials')
+    @patch('src.utils.azure_batch_utils.BatchServiceClient')
+    @patch('src.utils.azure_batch_utils.ServicePrincipalCredentials')
     def test_job_id_format_and_uniqueness(
         self, mock_credentials, mock_batch_service, mock_batch_env_vars
     ):
@@ -467,8 +467,8 @@ class TestCreateBatchJob(TestBatchStacJobCreatorIntegration):
         assert job_id_1.startswith('stac-processing-')
         assert job_id_2.startswith('stac-processing-')
     
-    @patch('src.batch_stac_job_creator.BatchServiceClient')
-    @patch('src.batch_stac_job_creator.ServicePrincipalCredentials')
+    @patch('src.utils.azure_batch_utils.BatchServiceClient')
+    @patch('src.utils.azure_batch_utils.ServicePrincipalCredentials')
     def test_uses_correct_pool(
         self, mock_credentials, mock_batch_service, mock_batch_env_vars
     ):

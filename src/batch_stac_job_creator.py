@@ -7,56 +7,27 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Dict
 import os
 
-from azure.batch import BatchServiceClient
-from azure.batch.models import JobAddParameter, PoolInformation, TaskAddParameter, ResourceFile
-from azure.common.credentials import ServicePrincipalCredentials
 from azure.batch.custom.custom_errors import CreateTasksErrorException
-from azure.storage.blob import (
-    BlobServiceClient, generate_blob_sas, generate_container_sas, 
-    BlobSasPermissions, ContainerSasPermissions
-)
+from azure.storage.blob import BlobServiceClient
 from azure.identity import DefaultAzureCredential
+
+from src.utils.batch_task_utils import create_chunks
+from src.utils.azure_batch_utils import (
+    create_batch_job_with_pool,
+    generate_sas_tokens_for_containers,
+    create_task_data_blob_client,
+    upload_work_items_and_create_task
+)
 
 
 def create_batch_job():
     """
     Create a batch job for STAC processing.
-    
+
     Returns:
         tuple: BatchServiceClient and job_id
     """
-    TENANT_ID = os.environ["AZURE_TENANT_ID"]
-    CLIENT_ID = os.environ["AZURE_CLIENT_ID"]
-    CLIENT_SECRET = os.environ["AZURE_CLIENT_SECRET"]
-    BATCH_ACCOUNT_URL = os.environ["BATCH_ACCOUNT_URL"]
-    RESOURCE = "https://batch.core.windows.net/"
-
-    credentials = ServicePrincipalCredentials(
-        client_id=CLIENT_ID,
-        secret=CLIENT_SECRET,
-        tenant=TENANT_ID,
-        resource=RESOURCE
-    )
-
-    batch_client = BatchServiceClient(
-        credentials,
-        batch_url=BATCH_ACCOUNT_URL
-    )
-
-    # Create a unique job ID with timestamp
-    job_id = f"stac-processing-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    
-    # Create job configuration
-    job = JobAddParameter(
-        id=job_id,
-        pool_info=PoolInformation(pool_id="geospatial-processing-pool")
-    )
-
-    # Create the job
-    print(f"Creating job: {job_id}")
-    batch_client.job.add(job)
-    
-    return batch_client, job_id
+    return create_batch_job_with_pool("stac-processing")
 
 
 def get_cog_files_to_process() -> List[Dict]:
@@ -147,133 +118,50 @@ def filter_existing_stac_items(work_items: List[Dict]) -> List[Dict]:
         raise
 
 
-def create_chunks(work_items: List[Dict], chunk_size: int = 100) -> List[List[Dict]]:
-    """
-    Split work items into chunks for batch processing.
-    
-    Parameters:
-        work_items (List[Dict]): List of work items
-        chunk_size (int): Number of items per chunk
-        
-    Returns:
-        List[List[Dict]]: List of chunks
-    """
-    chunks = []
-    for i in range(0, len(work_items), chunk_size):
-        chunk = work_items[i:i + chunk_size]
-        chunks.append(chunk)
-    return chunks
-
-
 def create_and_submit_tasks(batch_client, job_id: str, work_items_chunks: List[List[Dict]]):
     """
     Upload task data to Azure Storage and submit tasks with ResourceFiles.
-    
+
     Parameters:
         batch_client: Azure Batch client
         job_id (str): Batch job ID
         work_items_chunks (List[List[Dict]]): Chunks of work items to process
     """
-    tasks = []
-    
-    # Setup Azure Storage
+    # Setup Azure Storage and create task-data container if needed
+    blob_service_client, container_name = create_task_data_blob_client(ensure_container=True)
+
+    # Generate SAS tokens for containers
+    container_configs = {
+        "processed-cogs": {"read": True, "list": True},
+        "stac-items": {"read": True, "write": True, "create": True, "list": True},
+        "batch-logs": {"read": True, "write": True, "create": True, "list": True}
+    }
+    sas_tokens = generate_sas_tokens_for_containers(container_configs)
+
+    # Build environment variables
     STORAGE_ACCOUNT_URL = os.environ["STORAGE_ACCOUNT_URL"]
-    STORAGE_ACCOUNT_NAME = STORAGE_ACCOUNT_URL.split("//")[1].split(".")[0]
-    CONTAINER_NAME = "task-data"
-    BATCH_STORAGE_ACCOUNT_KEY = os.environ["BATCH_STORAGE_ACCOUNT_KEY"]
-    
-    storage_credential = DefaultAzureCredential()
-    blob_service_client = BlobServiceClient(
-        account_url=STORAGE_ACCOUNT_URL,
-        credential=storage_credential
-    )
-    
-    # Check/create task-data container
-    container_client = blob_service_client.get_container_client(CONTAINER_NAME)
-    try:
-        container_client.get_container_properties()
-    except:
-        container_client.create_container()
-        print(f"Created {CONTAINER_NAME} container")
-    
-    # Generate SAS tokens for containers (valid for 7 days)
-    cog_sas = generate_container_sas(
-        account_name=STORAGE_ACCOUNT_NAME,
-        container_name="processed-cogs",
-        account_key=BATCH_STORAGE_ACCOUNT_KEY,
-        permission=ContainerSasPermissions(read=True, list=True),
-        expiry=datetime.now(timezone.utc) + timedelta(days=7)
-    )
-    
-    stac_sas = generate_container_sas(
-        account_name=STORAGE_ACCOUNT_NAME,
-        container_name="stac-items",
-        account_key=BATCH_STORAGE_ACCOUNT_KEY,
-        permission=ContainerSasPermissions(read=True, write=True, create=True, list=True),
-        expiry=datetime.now(timezone.utc) + timedelta(days=7)
-    )
-    
-    logs_sas = generate_container_sas(
-        account_name=STORAGE_ACCOUNT_NAME,
-        container_name="batch-logs",
-        account_key=BATCH_STORAGE_ACCOUNT_KEY,
-        permission=ContainerSasPermissions(read=True, write=True, create=True, list=True),
-        expiry=datetime.now(timezone.utc) + timedelta(days=7)
-    )
-    
+    env_vars = {
+        "STORAGE_ACCOUNT_URL": STORAGE_ACCOUNT_URL,
+        "COG_CONTAINER_SAS": sas_tokens["processed-cogs"],
+        "STAC_CONTAINER_SAS": sas_tokens["stac-items"],
+        "LOGS_CONTAINER_SAS": sas_tokens["batch-logs"]
+    }
+
+    tasks = []
     for i, chunk in enumerate(work_items_chunks):
         task_id = f"stac_task{i:03d}"
-        
-        # Upload work items to blob
-        work_items_json = json.dumps(chunk)
-        blob_name = f"{job_id}/{task_id}_work_items.json"
-        
-        blob_client = blob_service_client.get_blob_client(
-            container=CONTAINER_NAME,
-            blob=blob_name
-        )
-        blob_client.upload_blob(work_items_json.encode('utf-8'), overwrite=True)
-        print(f"Uploaded data for {task_id} to blob: {blob_name}")
-        
-        # Create SAS URL for batch nodes
-        sas_token = generate_blob_sas(
-            account_name=STORAGE_ACCOUNT_NAME,
-            container_name=CONTAINER_NAME,
-            blob_name=blob_name,
-            account_key=BATCH_STORAGE_ACCOUNT_KEY,
-            permission=BlobSasPermissions(read=True),
-            expiry=datetime.now(timezone.utc) + timedelta(days=7)
-        )
-        blob_sas_url = f"{blob_client.url}?{sas_token}"
-        
-        # Create a resource file
-        resource_file = ResourceFile(
-            http_url=blob_sas_url,
-            file_path="work_items.json"
-        )
-        
-        # Command line to run on batch node
-        command_line = (
-            "/bin/bash -c '"
-            "export STORAGE_ACCOUNT_URL=\"" + STORAGE_ACCOUNT_URL + "\" && "
-            "export COG_CONTAINER_SAS=\"" + cog_sas + "\" && "
-            "export STAC_CONTAINER_SAS=\"" + stac_sas + "\" && "
-            "export LOGS_CONTAINER_SAS=\"" + logs_sas + "\" && "
-            "cd /tmp && "
-            "[ -d code ] && rm -rf code; "
-            "git clone https://github.com/MarShaikh/MPCP-lassa-sentinel.git code && "
-            "cd code && "
-            "python3.11 -m pip install -r requirements.txt && "
-            "python3.11 src/batch_stac_task_runner.py'"
-        )
-        
-        task = TaskAddParameter(
-            id=task_id,
-            command_line=command_line,
-            resource_files=[resource_file]
+
+        task = upload_work_items_and_create_task(
+            blob_service_client=blob_service_client,
+            container_name=container_name,
+            job_id=job_id,
+            task_id=task_id,
+            work_items_chunk=chunk,
+            env_vars=env_vars,
+            script_path="src/batch_stac_task_runner.py"
         )
         tasks.append(task)
-    
+
     # Submit all tasks at once
     print(f"Submitting {len(tasks)} tasks to job {job_id}")
     batch_client.task.add_collection(job_id, tasks)

@@ -122,9 +122,9 @@ class TestFilterExistingWorkItems(TestBatchJobCreatorIntegration):
 class TestCreateAndSubmitTasks(TestBatchJobCreatorIntegration):
     """Test task creation and submission with real blob storage."""
     
-    @patch('src.batch_processing.batch_job_creator.DefaultAzureCredential')
-    @patch('src.batch_processing.batch_job_creator.generate_container_sas')
-    @patch('src.batch_processing.batch_job_creator.generate_blob_sas')
+    @patch('src.utils.azure_batch_utils.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.generate_container_sas')
+    @patch('src.utils.azure_batch_utils.generate_blob_sas')
     def test_task_work_items_uploaded_to_azurite(
         self, mock_blob_sas, mock_container_sas, mock_credential,
         setup_test_containers, mock_batch_env_vars
@@ -174,9 +174,9 @@ class TestCreateAndSubmitTasks(TestBatchJobCreatorIntegration):
         assert work_items_data[0]['year'] == '1981'
         assert 'file1.tif.gz' in work_items_data[0]['url']
     
-    @patch('src.batch_processing.batch_job_creator.DefaultAzureCredential')
-    @patch('src.batch_processing.batch_job_creator.generate_container_sas')
-    @patch('src.batch_processing.batch_job_creator.generate_blob_sas')
+    @patch('src.utils.azure_batch_utils.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.generate_container_sas')
+    @patch('src.utils.azure_batch_utils.generate_blob_sas')
     def test_tasks_submitted_to_batch_client(
         self, mock_blob_sas, mock_container_sas, mock_credential,
         setup_test_containers, mock_batch_env_vars
@@ -219,9 +219,9 @@ class TestCreateAndSubmitTasks(TestBatchJobCreatorIntegration):
         assert 'work_items.json' in resource_file.file_path
         assert resource_file.http_url is not None
     
-    @patch('src.batch_processing.batch_job_creator.DefaultAzureCredential')
-    @patch('src.batch_processing.batch_job_creator.generate_container_sas')
-    @patch('src.batch_processing.batch_job_creator.generate_blob_sas')
+    @patch('src.utils.azure_batch_utils.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.generate_container_sas')
+    @patch('src.utils.azure_batch_utils.generate_blob_sas')
     def test_command_line_includes_environment_variables(
         self, mock_blob_sas, mock_container_sas, mock_credential,
         setup_test_containers, mock_batch_env_vars
@@ -258,9 +258,9 @@ class TestCreateAndSubmitTasks(TestBatchJobCreatorIntegration):
         assert 'python3.11' in command_line
         assert 'batch_task_runner.py' in command_line
     
-    @patch('src.batch_processing.batch_job_creator.DefaultAzureCredential')
-    @patch('src.batch_processing.batch_job_creator.generate_container_sas')
-    @patch('src.batch_processing.batch_job_creator.generate_blob_sas')
+    @patch('src.utils.azure_batch_utils.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.generate_container_sas')
+    @patch('src.utils.azure_batch_utils.generate_blob_sas')
     def test_multiple_task_chunks(
         self, mock_blob_sas, mock_container_sas, mock_credential,
         setup_test_containers, mock_batch_env_vars
@@ -298,9 +298,9 @@ class TestCreateAndSubmitTasks(TestBatchJobCreatorIntegration):
         blobs = list(container_client.list_blobs())
         assert len(blobs) == 3
     
-    @patch('src.batch_processing.batch_job_creator.DefaultAzureCredential')
-    @patch('src.batch_processing.batch_job_creator.generate_container_sas')
-    @patch('src.batch_processing.batch_job_creator.generate_blob_sas')
+    @patch('src.utils.azure_batch_utils.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.generate_container_sas')
+    @patch('src.utils.azure_batch_utils.generate_blob_sas')
     def test_blob_content_is_valid_json(
         self, mock_blob_sas, mock_container_sas, mock_credential,
         setup_test_containers, mock_batch_env_vars
@@ -344,8 +344,8 @@ class TestCreateAndSubmitTasks(TestBatchJobCreatorIntegration):
 class TestCreateBatchJob(TestBatchJobCreatorIntegration):
     """Test batch job creation (mocked since Azurite doesn't support Batch)."""
     
-    @patch('src.batch_processing.batch_job_creator.BatchServiceClient')
-    @patch('src.batch_processing.batch_job_creator.ServicePrincipalCredentials')
+    @patch('src.utils.azure_batch_utils.BatchServiceClient')
+    @patch('src.utils.azure_batch_utils.ServicePrincipalCredentials')
     def test_create_batch_job_success(
         self, mock_credentials, mock_batch_service, mock_batch_env_vars
     ):
@@ -377,8 +377,8 @@ class TestCreateBatchJob(TestBatchJobCreatorIntegration):
         
         assert batch_client == mock_batch_client
     
-    @patch('src.batch_processing.batch_job_creator.BatchServiceClient')
-    @patch('src.batch_processing.batch_job_creator.ServicePrincipalCredentials')
+    @patch('src.utils.azure_batch_utils.BatchServiceClient')
+    @patch('src.utils.azure_batch_utils.ServicePrincipalCredentials')
     def test_create_batch_job_with_pool_info(
         self, mock_credentials, mock_batch_service, mock_batch_env_vars
     ):
@@ -395,8 +395,8 @@ class TestCreateBatchJob(TestBatchJobCreatorIntegration):
         assert job_param.pool_info is not None
         assert job_param.pool_info.pool_id == 'geospatial-processing-pool'
     
-    @patch('src.batch_processing.batch_job_creator.BatchServiceClient')
-    @patch('src.batch_processing.batch_job_creator.ServicePrincipalCredentials')
+    @patch('src.utils.azure_batch_utils.BatchServiceClient')
+    @patch('src.utils.azure_batch_utils.ServicePrincipalCredentials')
     def test_create_batch_job_unique_ids(
         self, mock_credentials, mock_batch_service, mock_batch_env_vars
     ):
@@ -546,9 +546,9 @@ class TestMainIntegration(TestBatchJobCreatorIntegration):
 class TestSASTokenGeneration(TestBatchJobCreatorIntegration):
     """Test SAS token generation with Azurite."""
     
-    @patch('src.batch_processing.batch_job_creator.DefaultAzureCredential')
-    @patch('src.batch_processing.batch_job_creator.generate_container_sas')
-    @patch('src.batch_processing.batch_job_creator.generate_blob_sas')
+    @patch('src.utils.azure_batch_utils.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.generate_container_sas')
+    @patch('src.utils.azure_batch_utils.generate_blob_sas')
     def test_container_sas_tokens_generated(
         self, mock_blob_sas, mock_container_sas, mock_credential,
         setup_test_containers, mock_batch_env_vars
@@ -581,9 +581,9 @@ class TestSASTokenGeneration(TestBatchJobCreatorIntegration):
         assert 'batch-logs' in sas_calls
         assert len(sas_calls) == 3
     
-    @patch('src.batch_processing.batch_job_creator.DefaultAzureCredential')
-    @patch('src.batch_processing.batch_job_creator.generate_container_sas')
-    @patch('src.batch_processing.batch_job_creator.generate_blob_sas')
+    @patch('src.utils.azure_batch_utils.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.generate_container_sas')
+    @patch('src.utils.azure_batch_utils.generate_blob_sas')
     def test_sas_token_expiry(
         self, mock_blob_sas, mock_container_sas, mock_credential,
         setup_test_containers, mock_batch_env_vars
@@ -643,9 +643,9 @@ class TestErrorHandling(TestBatchJobCreatorIntegration):
             with pytest.raises(Exception):
                 filter_existing_work_items(work_items)
     
-    @patch('src.batch_processing.batch_job_creator.DefaultAzureCredential')
-    @patch('src.batch_processing.batch_job_creator.generate_container_sas')
-    @patch('src.batch_processing.batch_job_creator.generate_blob_sas')
+    @patch('src.utils.azure_batch_utils.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.generate_container_sas')
+    @patch('src.utils.azure_batch_utils.generate_blob_sas')
     def test_task_submission_with_batch_api_failure(
         self, mock_blob_sas, mock_container_sas, mock_credential,
         setup_test_containers, mock_batch_env_vars
@@ -670,9 +670,9 @@ class TestErrorHandling(TestBatchJobCreatorIntegration):
             with pytest.raises(Exception, match="Batch API error"):
                 create_and_submit_tasks(mock_batch_client, 'test-job', work_items_chunks)
     
-    @patch('src.batch_processing.batch_job_creator.DefaultAzureCredential')
-    @patch('src.batch_processing.batch_job_creator.generate_container_sas')
-    @patch('src.batch_processing.batch_job_creator.generate_blob_sas')
+    @patch('src.utils.azure_batch_utils.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.generate_container_sas')
+    @patch('src.utils.azure_batch_utils.generate_blob_sas')
     def test_partial_blob_upload_failure(
         self, mock_blob_sas, mock_container_sas, mock_credential,
         setup_test_containers, mock_batch_env_vars
@@ -682,24 +682,25 @@ class TestErrorHandling(TestBatchJobCreatorIntegration):
         mock_container_sas.return_value = 'sas'
         mock_blob_sas.return_value = 'blob_sas'
         mock_batch_client = MagicMock()
-        
+
         # Create multiple chunks
         work_items_chunks = [
             [{'year': '1981', 'url': 'https://test.url/file1.tif.gz'}],
             [{'year': '1981', 'url': 'https://test.url/file2.tif.gz'}],
         ]
-        
+
         # Make the second upload fail
         upload_count = [0]
         def failing_upload(*args, **kwargs):
             upload_count[0] += 1
             if upload_count[0] == 2:
                 raise Exception("Upload failed for second blob")
-        
-        with patch('src.batch_processing.batch_job_creator.BlobServiceClient') as mock_blob_service:
+
+        # Need to patch BlobServiceClient where it's created (in utils module)
+        with patch('src.utils.azure_batch_utils.BlobServiceClient') as mock_blob_service:
             connection_string = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
             real_blob_service = BlobServiceClient.from_connection_string(connection_string)
-            
+
             # Wrap upload_blob to inject failure
             original_get_blob_client = real_blob_service.get_blob_client
             def get_blob_client_wrapper(*args, **kwargs):
@@ -709,10 +710,11 @@ class TestErrorHandling(TestBatchJobCreatorIntegration):
                     failing_upload(*a, **k) or original_upload(*a, **k)
                 )
                 return blob_client
-            
+
             real_blob_service.get_blob_client = get_blob_client_wrapper
             mock_blob_service.return_value = real_blob_service
-            
+            mock_blob_service.from_connection_string = lambda cs: real_blob_service
+
             # Should raise exception on second upload
             with pytest.raises(Exception, match="Upload failed for second blob"):
                 create_and_submit_tasks(mock_batch_client, 'test-job', work_items_chunks)
@@ -721,9 +723,9 @@ class TestErrorHandling(TestBatchJobCreatorIntegration):
 class TestTaskDataContainerCreation(TestBatchJobCreatorIntegration):
     """Test automatic creation of task-data container."""
     
-    @patch('src.batch_processing.batch_job_creator.DefaultAzureCredential')
-    @patch('src.batch_processing.batch_job_creator.generate_container_sas')
-    @patch('src.batch_processing.batch_job_creator.generate_blob_sas')
+    @patch('src.utils.azure_batch_utils.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.generate_container_sas')
+    @patch('src.utils.azure_batch_utils.generate_blob_sas')
     def test_task_data_container_must_exist(
         self, mock_blob_sas, mock_container_sas, mock_credential,
         azurite_blob_service, mock_batch_env_vars

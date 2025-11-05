@@ -4,40 +4,8 @@ import sys
 from typing import List, Dict
 
 from src.batch_processing.processing import process_batch_with_progress
+from src.utils.batch_task_utils import get_work_items_from_file, setup_working_directories
 
-def get_work_items_from_file() -> List[Dict]:
-    """
-    Reads work items from a JSON file in the task's working directory.
-    The file is downloaded by the Batch service via a ResourceFile.
-    
-    Returns
-    -------
-    List[dict]
-        List of work items to process
-    """
-    # AZ_BATCH_TASK_WORKING_DIR is a default environment variable set by Batch.
-    task_working_dir = os.environ.get("AZ_BATCH_TASK_WORKING_DIR")
-    file_path = os.path.join(task_working_dir, "work_items.json")
-
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Work items file not found at: {file_path}")
-
-    try:
-        with open(file_path, 'r') as f:
-            work_items = json.load(f)
-        return work_items
-    except (json.JSONDecodeError, IOError) as e:
-        raise ValueError(f"Failed to read or parse work_items.json: {e}")
-    
-    
-def setup_working_directories():
-    """
-    Creates necessary directories for processing on the VM
-    """
-    base_dir = "/tmp/processing"
-    os.makedirs(os.path.join(base_dir, "raw-data"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "processed-cogs"), exist_ok=True)
-    os.makedirs("/tmp/batch-logs", exist_ok=True)
 
 def main():
     try:
@@ -45,7 +13,11 @@ def main():
         task_id = os.environ.get('AZ_BATCH_TASK_ID', 'unknown_task')
         print(f"Task ID: {task_id}")
 
-        setup_working_directories()
+        setup_working_directories([
+            "/tmp/processing/raw-data",
+            "/tmp/processing/processed-cogs",
+            "/tmp/batch-logs"
+        ])
     
         work_items = get_work_items_from_file()
         

@@ -15,28 +15,10 @@ from rasterio.warp import transform_bounds
 
 from azure.storage.blob import BlobServiceClient
 
-# create chunks of data for processing
-def create_chunks(work_items: List[dict], chunk_size: int = 550):
-    """
-    Splits a list of work items into smaller chunks for batch processing.
-    Parameters
-    ----------
-    work_items : List[dict]
-        A list of dictionaries, where each dictionary represents a work item
-        (e.g., containing 'year' and 'url' for a file to process).
-    chunk_size : int, optional
-        The maximum number of work items to include in each chunk.
-        Defaults to 550.
-    Returns
-    -------
-    List[List[dict]]
-        A list of lists, where each inner list is a chunk of work items.
-    """
-    chunks = []
-    for i in range(0, len(work_items), chunk_size):
-        chunk = work_items[i:i+chunk_size]
-        chunks.append(chunk)
-    return chunks
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from src.utils.batch_task_utils import update_progress_file, cleanup_local_files
+from src.utils.azure_storage_utils import upload_blob_to_azure_with_sas
 
 def unzip_file(url: str) -> bytes:
     """
@@ -189,143 +171,39 @@ def decompress_convert_to_cog_with_retry(work_item: dict, directory: str, max_re
                 raise e
             
     
-def update_progress_file(task_id, completed, failed_files):  # Write to progress/task_{id}.json  
-    """
-    Updates a progress file called {task_id}.json and uploads it to logs on Azure Blob Store
-
-    Parameters:
-    -----------
-    task_id: str
-        Batch number 
-    completed: str
-        The number of files that were processed in this batch
-    failed_files: dict
-        A dict of failed files that could have failed due to various reasons
-
-    Returns
-    -------
-    None
-    """
-    iso_timestamp = datetime.now().isoformat()
-    batch_number = task_id
-    completed = completed
-    
-    json_file = {
-        "iso_timestamp": iso_timestamp,
-        "batch_number": batch_number,
-        "completed": completed,
-        "failed_files": failed_files
-    }
-    
-    temp_dir = "/tmp/batch-logs"
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    file_name = f"{task_id}.json"
-    upload_file_path = os.path.join(temp_dir, file_name)
-    
-    container_name = "batch-logs"
-
-    with open(upload_file_path, 'w') as f:
-        json.dump(json_file, f)
-
-    upload_blob_to_azure(container_name=container_name, file_path=upload_file_path, file_name=file_name)
-    cleanup_local_files(upload_file_path)
-
-    
-    
-def upload_blob_to_azure(container_name: str, file_path: str, file_name: str):
-    """
-    Uploads a local file at <file_path> to a blob names <file_name> within a container <container_name>
-
-    Parameters:
-    ----------
-    container_name: str
-        Name of the container on Azure Blob Storage account
-    
-    file_path: str
-        Path to the local file
-
-    file_name: str
-        Name of the uploaded file in the container
-
-    Returns:
-    -------
-    None
-    """
-    
-    storage_account_url = os.environ["STORAGE_ACCOUNT_URL"]
-    
-    # Get the appropriate SAS token based on container
-    if container_name == "processed-cogs":
-        sas_token = os.environ["COG_CONTAINER_SAS"]
-    elif container_name == "raw-data":
-        sas_token = os.environ["RAW_CONTAINER_SAS"]
-    elif container_name == "batch-logs":
-        sas_token = os.environ["LOGS_CONTAINER_SAS"]
-    else:
-        raise ValueError(f"Unknown container: {container_name}")
-    
-    # Create blob service client with SAS token
-    blob_service_client = BlobServiceClient(
-        account_url=f"{storage_account_url}?{sas_token}"
-    )
-    
-    blob_client = blob_service_client.get_blob_client(container=container_name, blob=file_name)
-    
-    print(f"\nUploading to Azure as blob:\n\t{file_path}")
-    with open(file=file_path, mode="rb") as data:
-        blob_client.upload_blob(data, overwrite=True)
-
-def cleanup_local_files(file_paths: List[Tuple] | str):
-    """Delete local files after uploading them to Azure Blob"""
-    if type(file_paths) == str:
-        try:
-            os.remove(file_paths)
-            print(f"Local {file_paths} removed")
-        except FileNotFoundError:
-            print(f"File '{file_paths}' not found.")
-    else:
-        for (i, j) in file_paths:
-            try:
-                os.remove(i)  # processed file
-                print(f"Local raw file removed: {i}")
-            except FileNotFoundError:
-                print(f"File '{i}' not found.")
-            
-            try:
-                os.remove(j)  # COG file
-                print(f"COG file removed: {j}")
-            except FileNotFoundError:
-                print(f"File '{j}' not found.")
-    
-
 def process_batch_with_progress(work_items_chunk: List[dict]):
-    
+
     # Get task ID from environment instead of parameter
     task_id = os.environ.get('AZ_BATCH_TASK_ID', f'local_task_{int(time.time())}')
-    
+
     # Use Batch VM working directory
     directory = "/tmp/processing/"
     os.makedirs(directory, exist_ok=True)
-    
-    # progress reporting vars: 
+
+    # Get Azure storage configuration
+    storage_account_url = os.environ["STORAGE_ACCOUNT_URL"]
+    cog_sas = os.environ["COG_CONTAINER_SAS"]
+    raw_sas = os.environ["RAW_CONTAINER_SAS"]
+    logs_sas = os.environ["LOGS_CONTAINER_SAS"]
+
+    # progress reporting vars:
     failed_files = []
-    completed = [] 
-    
+    completed = []
+
     # adding clean up var
-    cleanup = [] 
-    
+    cleanup = []
+
     processed_count = 0
     for i, item in enumerate(work_items_chunk):
-        try: 
+        try:
             cog_container_name = "processed-cogs"
             raw_container_name = "raw-data"
             cog_file_path, cog_file_name, raw_file_path, raw_file_name = decompress_convert_to_cog(item, directory)
 
             year = item['year']
 
-            upload_blob_to_azure(container_name=cog_container_name, file_path=cog_file_path, file_name=f"{year}/{cog_file_name}")
-            upload_blob_to_azure(container_name=raw_container_name, file_path=raw_file_path, file_name=f"{year}/{raw_file_name}")
+            upload_blob_to_azure_with_sas(storage_account_url, cog_container_name, cog_file_path, f"{year}/{cog_file_name}", cog_sas)
+            upload_blob_to_azure_with_sas(storage_account_url, raw_container_name, raw_file_path, f"{year}/{raw_file_name}", raw_sas)
 
             completed.append((cog_file_path, raw_file_path)) # progress tracking
             cleanup.append((cog_file_path, raw_file_path)) # cleanup files
@@ -335,11 +213,20 @@ def process_batch_with_progress(work_items_chunk: List[dict]):
             continue
 
         processed_count += 1
-        
+
         if processed_count % 10 == 0 or i == len(work_items_chunk) - 1:
             print(f"Task ID: {task_id}, Completed: {completed}, Failed Files: {failed_files}")
-            update_progress_file(task_id, len(completed), failed_files)
-            if cleanup: 
+            # Use the utility function with proper parameters
+            update_progress_file(
+                task_id=task_id,
+                completed=completed,
+                failed=failed_files,
+                total=len(work_items_chunk),
+                storage_account_url=storage_account_url,
+                logs_sas=logs_sas,
+                progress_file_prefix="task_"
+            )
+            if cleanup:
                 cleanup_local_files(cleanup)
                 cleanup.clear()
             
