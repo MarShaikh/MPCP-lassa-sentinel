@@ -1,7 +1,7 @@
 from typing import List
 
 
-from src.batch_processing.data_extraction import find_tiff_url
+from src.cog_creation.data_extraction import find_tiff_url
 from src.utils.batch_task_utils import filter_existing_items
 from src.utils.azure_batch_utils import (
     create_batch_job_with_pool,

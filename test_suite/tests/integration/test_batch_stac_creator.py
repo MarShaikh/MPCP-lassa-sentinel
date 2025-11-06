@@ -17,7 +17,7 @@ from unittest.mock import patch, MagicMock
 
 from azure.storage.blob import BlobServiceClient
 
-from src.batch_stac_job_creator import (
+from src.stac_creation.batch_job_creator import (
     create_batch_job,
     get_cog_files_to_process,
     filter_existing_stac_items,

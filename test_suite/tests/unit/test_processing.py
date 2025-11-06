@@ -8,7 +8,7 @@ import gzip
 import tempfile
 from unittest.mock import Mock, patch, MagicMock, mock_open
 
-from src.batch_processing.processing import (
+from src.cog_creation.processing import (
     unzip_file,
     clip_to_cog,
     process_batch_with_progress
@@ -65,7 +65,7 @@ class TestCreateChunks:
 class TestUnzipFile:
     """Tests for unzip_file function."""
     
-    @patch('src.batch_processing.processing.requests.get')
+    @patch('src.cog_creation.processing.requests.get')
     def test_unzip_gzipped_file(self, mock_get, sample_chirps_compressed):
         """Test decompressing a gzipped file."""
         mock_response = Mock()
@@ -78,7 +78,7 @@ class TestUnzipFile:
         assert result == gzip.decompress(sample_chirps_compressed)
         mock_get.assert_called_once_with("http://test.url/file.tif.gz")
     
-    @patch('src.batch_processing.processing.requests.get')
+    @patch('src.cog_creation.processing.requests.get')
     def test_unzip_non_gzipped_file(self, mock_get, sample_chirps_data):
         """Test handling non-gzipped file."""
         mock_response = Mock()
@@ -90,7 +90,7 @@ class TestUnzipFile:
         
         assert result == sample_chirps_data
     
-    @patch('src.batch_processing.processing.requests.get')
+    @patch('src.cog_creation.processing.requests.get')
     def test_unzip_file_http_error(self, mock_get):
         """Test handling HTTP error."""
         mock_response = Mock()
@@ -105,10 +105,10 @@ class TestUnzipFile:
 class TestClipToCog:
     """Tests for clip_to_cog function."""
     
-    @patch('src.batch_processing.processing.CRS')
-    @patch('src.batch_processing.processing.transform_bounds')
-    @patch('src.batch_processing.processing.from_bounds')
-    @patch('src.batch_processing.processing.rasterio.open')
+    @patch('src.cog_creation.processing.CRS')
+    @patch('src.cog_creation.processing.transform_bounds')
+    @patch('src.cog_creation.processing.from_bounds')
+    @patch('src.cog_creation.processing.rasterio.open')
     def test_clip_to_cog_success(self, mock_rasterio_open, mock_from_bounds, 
                                  mock_transform_bounds, mock_CRS, temp_dir):
         """Test successful COG creation."""
@@ -171,7 +171,7 @@ class TestClipToCog:
         mock_dst.write.assert_called_once()
         mock_dst.build_overviews.assert_called_once()
     
-    @patch('src.batch_processing.processing.rasterio.open')
+    @patch('src.cog_creation.processing.rasterio.open')
     def test_clip_to_cog_with_exception(self, mock_rasterio_open):
         """Test exception handling in clip_to_cog."""
         mock_rasterio_open.side_effect = Exception("Rasterio error")
@@ -291,10 +291,10 @@ class TestUpdateProgressFile:
 class TestProcessBatchWithProgress:
     """Tests for process_batch_with_progress orchestration."""
 
-    @patch('src.batch_processing.processing.upload_blob_to_azure_with_sas')
-    @patch('src.batch_processing.processing.decompress_convert_to_cog')
-    @patch('src.batch_processing.processing.update_progress_file')
-    @patch('src.batch_processing.processing.cleanup_local_files')
+    @patch('src.cog_creation.processing.upload_blob_to_azure_with_sas')
+    @patch('src.cog_creation.processing.decompress_convert_to_cog')
+    @patch('src.cog_creation.processing.update_progress_file')
+    @patch('src.cog_creation.processing.cleanup_local_files')
     def test_process_batch_success(
         self, mock_cleanup, mock_update, mock_decompress, mock_upload,
         sample_work_items, mock_azure_storage_env
@@ -321,9 +321,9 @@ class TestProcessBatchWithProgress:
         # Verify cleanup
         assert mock_cleanup.called
     
-    @patch('src.batch_processing.processing.upload_blob_to_azure_with_sas')
-    @patch('src.batch_processing.processing.decompress_convert_to_cog')
-    @patch('src.batch_processing.processing.update_progress_file')
+    @patch('src.cog_creation.processing.upload_blob_to_azure_with_sas')
+    @patch('src.cog_creation.processing.decompress_convert_to_cog')
+    @patch('src.cog_creation.processing.update_progress_file')
     def test_process_batch_with_failures(
         self, mock_update, mock_decompress, mock_upload,
         sample_work_items, mock_azure_storage_env  # Add this fixture

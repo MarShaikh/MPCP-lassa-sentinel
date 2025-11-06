@@ -17,7 +17,7 @@ from unittest.mock import patch, MagicMock
 
 from azure.storage.blob import BlobServiceClient
 
-from src.batch_processing.batch_job_creator import (
+from src.cog_creation.batch_job_creator import (
     create_batch_job,
     create_and_submit_tasks,
     filter_existing_work_items,
@@ -425,7 +425,7 @@ class TestMainIntegration(TestBatchJobCreatorIntegration):
     
     @patch('src.utils.azure_batch_utils.create_batch_job_with_pool')
     @patch('src.utils.azure_batch_utils.create_and_submit_tasks_with_config')
-    @patch('src.batch_processing.batch_job_creator.find_tiff_url')
+    @patch('src.cog_creation.batch_job_creator.find_tiff_url')
     @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_main_end_to_end_with_azurite(
         self, mock_credential, mock_find_tiff, mock_submit_tasks, mock_create_job,
@@ -471,7 +471,7 @@ class TestMainIntegration(TestBatchJobCreatorIntegration):
         assert len(work_items_chunks) == 1
         assert work_items_chunks[0][0]['year'] == '1982'
     
-    @patch('src.batch_processing.batch_job_creator.find_tiff_url')
+    @patch('src.cog_creation.batch_job_creator.find_tiff_url')
     @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_main_no_year_urls_found(
         self, mock_credential, mock_find_tiff, 
@@ -490,8 +490,8 @@ class TestMainIntegration(TestBatchJobCreatorIntegration):
         
         assert mock_find_tiff.call_count == 1
     
-    @patch('src.batch_processing.batch_job_creator.create_batch_job')
-    @patch('src.batch_processing.batch_job_creator.find_tiff_url')
+    @patch('src.cog_creation.batch_job_creator.create_batch_job')
+    @patch('src.cog_creation.batch_job_creator.find_tiff_url')
     @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_main_all_items_already_processed(
         self, mock_credential, mock_find_tiff, mock_create_job,
@@ -515,9 +515,9 @@ class TestMainIntegration(TestBatchJobCreatorIntegration):
         
         mock_create_job.assert_not_called()
     
-    @patch('src.batch_processing.batch_job_creator.create_batch_job')
-    @patch('src.batch_processing.batch_job_creator.create_and_submit_tasks')
-    @patch('src.batch_processing.batch_job_creator.find_tiff_url')
+    @patch('src.cog_creation.batch_job_creator.create_batch_job')
+    @patch('src.cog_creation.batch_job_creator.create_and_submit_tasks')
+    @patch('src.cog_creation.batch_job_creator.find_tiff_url')
     @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_main_no_work_items_generated(
         self, mock_credential, mock_find_tiff, mock_submit_tasks, mock_create_job,

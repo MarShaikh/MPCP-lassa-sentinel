@@ -4,7 +4,7 @@ Unit tests for data_extraction module.
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from src.batch_processing.data_extraction import (
+from src.cog_creation.data_extraction import (
     get_table_from_link,
     find_data_storage,
     find_tiff_url
@@ -14,7 +14,7 @@ from src.batch_processing.data_extraction import (
 class TestGetTableFromLink:
     """Tests for get_table_from_link function."""
     
-    @patch('src.batch_processing.data_extraction.requests.get')
+    @patch('src.cog_creation.data_extraction.requests.get')
     def test_get_table_from_link_success(self, mock_get, mock_html_response):
         """Test successful extraction of table data."""
         # Setup mock response
@@ -29,7 +29,7 @@ class TestGetTableFromLink:
         assert all(td.name == 'td' for td in result)
         assert result[0].find('a')['href'] == '1981/'
         
-    @patch('src.batch_processing.data_extraction.requests.get')
+    @patch('src.cog_creation.data_extraction.requests.get')
     def test_get_table_from_link_with_size_class(self, mock_get, mock_html_response):
         """Test extraction with size class."""
         mock_response = Mock()
@@ -41,7 +41,7 @@ class TestGetTableFromLink:
         assert len(result) == 4  # Should find 4 size elements
         assert '125.5 KiB' in result[0].text
         
-    @patch('src.batch_processing.data_extraction.requests.get')
+    @patch('src.cog_creation.data_extraction.requests.get')
     def test_get_table_from_link_no_table(self, mock_get):
         """Test when no table with id='list' exists."""
         mock_response = Mock()
@@ -51,7 +51,7 @@ class TestGetTableFromLink:
         with pytest.raises(AttributeError):
             get_table_from_link("http://test.url", "link")
     
-    @patch('src.batch_processing.data_extraction.requests.get')
+    @patch('src.cog_creation.data_extraction.requests.get')
     def test_get_table_from_link_empty_table(self, mock_get):
         """Test when table exists but has no matching elements."""
         mock_response = Mock()
@@ -65,7 +65,7 @@ class TestGetTableFromLink:
 class TestFindDataStorage:
     """Tests for find_data_storage function."""
     
-    @patch('src.batch_processing.data_extraction.get_table_from_link')
+    @patch('src.cog_creation.data_extraction.get_table_from_link')
     def test_find_data_storage_calculation(self, mock_get_table):
         """Test storage calculation from size data."""
         # Create mock BeautifulSoup objects
@@ -84,7 +84,7 @@ class TestFindDataStorage:
         expected = (125.5 + 130.2 + 1024.0) * 0.001024
         assert abs(result - expected) < 0.001
     
-    @patch('src.batch_processing.data_extraction.get_table_from_link')
+    @patch('src.cog_creation.data_extraction.get_table_from_link')
     def test_find_data_storage_no_matching_pattern(self, mock_get_table):
         """Test when no sizes match the pattern."""
         mock_sizes = []
@@ -99,7 +99,7 @@ class TestFindDataStorage:
         result = find_data_storage("http://test.url", r"\d+\.\d+")
         assert result == 0  # No matching sizes
     
-    @patch('src.batch_processing.data_extraction.get_table_from_link')
+    @patch('src.cog_creation.data_extraction.get_table_from_link')
     def test_find_data_storage_empty_list(self, mock_get_table):
         """Test with empty size list."""
         mock_get_table.return_value = []
@@ -111,7 +111,7 @@ class TestFindDataStorage:
 class TestFindTiffUrl:
     """Tests for find_tiff_url function."""
     
-    @patch('src.batch_processing.data_extraction.get_table_from_link')
+    @patch('src.cog_creation.data_extraction.get_table_from_link')
     def test_find_tiff_url_year_pattern(self, mock_get_table):
         """Test finding year directory URLs."""
         # Create mock link elements
@@ -135,7 +135,7 @@ class TestFindTiffUrl:
         assert f"{base_url}2020/" in result
         assert f"{base_url}readme.txt" not in result
     
-    @patch('src.batch_processing.data_extraction.get_table_from_link')
+    @patch('src.cog_creation.data_extraction.get_table_from_link')
     def test_find_tiff_url_chirps_pattern(self, mock_get_table):
         """Test finding CHIRPS data file URLs."""
         mock_links = []
@@ -156,7 +156,7 @@ class TestFindTiffUrl:
         assert f"{base_url}chirps-v2.0.1981.01.02.tif.gz" in result
         assert f"{base_url}other.txt" not in result
     
-    @patch('src.batch_processing.data_extraction.get_table_from_link')
+    @patch('src.cog_creation.data_extraction.get_table_from_link')
     def test_find_tiff_url_no_matches(self, mock_get_table):
         """Test when no URLs match the pattern."""
         mock_links = []

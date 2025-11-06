@@ -3,7 +3,7 @@ import json
 import sys
 from typing import List, Dict
 
-from src.batch_processing.processing import process_batch_with_progress
+from src.cog_creation.processing import process_batch_with_progress
 from src.utils.batch_task_utils import get_work_items_from_file, setup_working_directories
 
 

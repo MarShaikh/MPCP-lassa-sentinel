@@ -15,7 +15,7 @@ from azure.identity import DefaultAzureCredential
 # Import the STAC conversion functions
 # Try importing from the installed package structure first (for tests)
 try:
-    from src.stac_conversion import process_cog_to_stac, save_stac_item_to_blob
+    from src.stac_creation.stac_conversion import process_cog_to_stac, save_stac_item_to_blob
     from src.utils.batch_task_utils import get_work_items_from_file, setup_working_directories, update_progress_file
 except ImportError:
     # Fall back to direct import (for Azure Batch execution)

@@ -7,9 +7,9 @@ from unittest.mock import patch, MagicMock
 import os
 import tempfile
 
-from src.batch_processing.batch_task_runner import main
-from src.batch_processing.processing import process_batch_with_progress
-from src.batch_processing.batch_job_creator import create_batch_job
+from src.cog_creation.batch_task_runner import main
+from src.cog_creation.processing import process_batch_with_progress
+from src.cog_creation.batch_job_creator import create_batch_job
 from src.utils.batch_task_utils import get_work_items_from_file
 from src.utils.azure_storage_utils import upload_blob_to_azure_with_sas
 
@@ -38,7 +38,7 @@ class TestRequiredEnvironmentVariables:
             finally:
                 os.unlink(temp_file)
     
-    @patch('src.batch_processing.processing.decompress_convert_to_cog')
+    @patch('src.cog_creation.processing.decompress_convert_to_cog')
     def test_missing_cog_container_sas(self, mock_decompress):
         """Test that process_batch_with_progress fails when COG_CONTAINER_SAS is missing."""
         env_vars = {
@@ -57,7 +57,7 @@ class TestRequiredEnvironmentVariables:
 
             assert "COG_CONTAINER_SAS" in str(exc_info.value)
     
-    @patch('src.batch_processing.processing.decompress_convert_to_cog')
+    @patch('src.cog_creation.processing.decompress_convert_to_cog')
     def test_missing_raw_container_sas(self, mock_decompress):
         """Test that process_batch_with_progress fails when RAW_CONTAINER_SAS is missing."""
         env_vars = {
@@ -76,7 +76,7 @@ class TestRequiredEnvironmentVariables:
 
             assert "RAW_CONTAINER_SAS" in str(exc_info.value)
     
-    @patch('src.batch_processing.processing.decompress_convert_to_cog')
+    @patch('src.cog_creation.processing.decompress_convert_to_cog')
     def test_missing_logs_container_sas(self, mock_decompress):
         """Test that process_batch_with_progress fails when LOGS_CONTAINER_SAS is missing."""
         env_vars = {
@@ -279,7 +279,7 @@ class TestInvalidEnvironmentVariables:
 class TestAllRequiredEnvironmentVariablesPresent:
     """Test that code works when all required environment variables are present."""
     
-    @patch('src.batch_processing.processing.BlobServiceClient')
+    @patch('src.cog_creation.processing.BlobServiceClient')
     def test_upload_with_all_required_vars_for_cog_container(self, mock_blob_service):
         """Test successful upload when all required variables are set."""
         env_vars = {

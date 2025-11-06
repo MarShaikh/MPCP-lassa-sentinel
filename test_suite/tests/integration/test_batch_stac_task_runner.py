@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 from azure.storage.blob import BlobServiceClient
 
-from src.batch_stac_task_runner import (
+from src.stac_creation.batch_task_runner import (
     get_work_items_from_file,
     setup_working_directories,
     process_single_cog,
@@ -132,8 +132,8 @@ class TestSetupWorkingDirectories:
 class TestProcessSingleCog:
     """Tests for process_single_cog function."""
     
-    @patch('src.batch_stac_task_runner.save_stac_item_to_blob')
-    @patch('src.batch_stac_task_runner.process_cog_to_stac')
+    @patch('src.stac_creation.batch_task_runner.save_stac_item_to_blob')
+    @patch('src.stac_creation.batch_task_runner.process_cog_to_stac')
     def test_process_single_cog_success(self, mock_process_stac, mock_save_stac, 
                                        mock_stac_azure_env):
         """Test successful processing of a single COG to STAC."""
@@ -184,8 +184,8 @@ class TestProcessSingleCog:
             blob_path='1981/nigeria-cog-chirps-v2.0.1981.01.01.json'
         )
     
-    @patch('src.batch_stac_task_runner.save_stac_item_to_blob')
-    @patch('src.batch_stac_task_runner.process_cog_to_stac')
+    @patch('src.stac_creation.batch_task_runner.save_stac_item_to_blob')
+    @patch('src.stac_creation.batch_task_runner.process_cog_to_stac')
     def test_process_single_cog_conversion_failure(self, mock_process_stac, 
                                                    mock_save_stac, mock_stac_azure_env):
         """Test handling of STAC conversion failure."""
@@ -214,8 +214,8 @@ class TestProcessSingleCog:
         # Verify save was not called
         mock_save_stac.assert_not_called()
     
-    @patch('src.batch_stac_task_runner.save_stac_item_to_blob')
-    @patch('src.batch_stac_task_runner.process_cog_to_stac')
+    @patch('src.stac_creation.batch_task_runner.save_stac_item_to_blob')
+    @patch('src.stac_creation.batch_task_runner.process_cog_to_stac')
     def test_process_single_cog_save_failure(self, mock_process_stac, 
                                             mock_save_stac, mock_stac_azure_env):
         """Test handling of blob save failure."""
@@ -363,10 +363,10 @@ class TestProcessBatchWithProgress:
             except:
                 pass
     
-    @patch('src.batch_stac_task_runner.update_progress_file')
-    @patch('src.batch_stac_task_runner.save_stac_item_to_blob')
-    @patch('src.batch_stac_task_runner.process_cog_to_stac')
-    @patch('src.batch_stac_task_runner.BlobServiceClient')
+    @patch('src.stac_creation.batch_task_runner.update_progress_file')
+    @patch('src.stac_creation.batch_task_runner.save_stac_item_to_blob')
+    @patch('src.stac_creation.batch_task_runner.process_cog_to_stac')
+    @patch('src.stac_creation.batch_task_runner.BlobServiceClient')
     def test_process_batch_success(self, mock_blob_service_class, mock_process_stac, 
                                    mock_save_stac, mock_update_progress, azurite_containers, 
                                    mock_stac_azure_env):
@@ -407,10 +407,10 @@ class TestProcessBatchWithProgress:
         assert mock_update_progress.called
         assert len(progress_calls) == 1
     
-    @patch('src.batch_stac_task_runner.update_progress_file')
-    @patch('src.batch_stac_task_runner.save_stac_item_to_blob')
-    @patch('src.batch_stac_task_runner.process_cog_to_stac')
-    @patch('src.batch_stac_task_runner.BlobServiceClient')
+    @patch('src.stac_creation.batch_task_runner.update_progress_file')
+    @patch('src.stac_creation.batch_task_runner.save_stac_item_to_blob')
+    @patch('src.stac_creation.batch_task_runner.process_cog_to_stac')
+    @patch('src.stac_creation.batch_task_runner.BlobServiceClient')
     def test_process_batch_with_failures(self, mock_blob_service_class, mock_process_stac,
                                          mock_save_stac, mock_update_progress, azurite_containers,
                                          mock_stac_azure_env):
@@ -449,10 +449,10 @@ class TestProcessBatchWithProgress:
         assert len(call_kwargs['completed']) == 1  # One success
         assert len(call_kwargs['failed']) == 2     # Two failures
     
-    @patch('src.batch_stac_task_runner.update_progress_file')
-    @patch('src.batch_stac_task_runner.save_stac_item_to_blob')
-    @patch('src.batch_stac_task_runner.process_cog_to_stac')
-    @patch('src.batch_stac_task_runner.BlobServiceClient')
+    @patch('src.stac_creation.batch_task_runner.update_progress_file')
+    @patch('src.stac_creation.batch_task_runner.save_stac_item_to_blob')
+    @patch('src.stac_creation.batch_task_runner.process_cog_to_stac')
+    @patch('src.stac_creation.batch_task_runner.BlobServiceClient')
     def test_process_batch_progress_updates_every_10_items(self, mock_blob_service_class,
                                                           mock_process_stac, mock_save_stac,
                                                           mock_update_progress, azurite_containers,
@@ -484,7 +484,7 @@ class TestProcessBatchWithProgress:
 class TestMainFunction:
     """Integration tests for main function."""
     
-    @patch('src.batch_stac_task_runner.process_batch_with_progress')
+    @patch('src.stac_creation.batch_task_runner.process_batch_with_progress')
     def test_main_success(self, mock_process_batch, mock_batch_stac_env, 
                          stac_work_items_json_file, sample_stac_work_items):
         """Test successful execution of main function."""
@@ -499,7 +499,7 @@ class TestMainFunction:
         assert call_args == sample_stac_work_items
         assert len(call_args) == 3
     
-    @patch('src.batch_stac_task_runner.process_batch_with_progress')
+    @patch('src.stac_creation.batch_task_runner.process_batch_with_progress')
     def test_main_with_empty_work_items(self, mock_process_batch, mock_batch_stac_env, 
                                        empty_stac_work_items_file):
         """Test main function with empty work items list."""
@@ -508,7 +508,7 @@ class TestMainFunction:
         # Should still call process_batch_with_progress with empty list
         mock_process_batch.assert_called_once_with([])
     
-    @patch('src.batch_stac_task_runner.process_batch_with_progress')
+    @patch('src.stac_creation.batch_task_runner.process_batch_with_progress')
     def test_main_exits_on_file_not_found(self, mock_process_batch, temp_dir):
         """Test main exits with error code when work items file not found."""
         env_vars = {
@@ -530,7 +530,7 @@ class TestMainFunction:
         # process_batch_with_progress should not be called
         mock_process_batch.assert_not_called()
     
-    @patch('src.batch_stac_task_runner.process_batch_with_progress')
+    @patch('src.stac_creation.batch_task_runner.process_batch_with_progress')
     def test_main_exits_on_json_error(self, mock_process_batch, mock_batch_stac_env, 
                                      malformed_stac_json_file):
         """Test main exits with error code on JSON parsing error."""
@@ -540,7 +540,7 @@ class TestMainFunction:
         assert exc_info.value.code == 1
         mock_process_batch.assert_not_called()
     
-    @patch('src.batch_stac_task_runner.process_batch_with_progress')
+    @patch('src.stac_creation.batch_task_runner.process_batch_with_progress')
     def test_main_exits_on_processing_error(self, mock_process_batch, mock_batch_stac_env, 
                                            stac_work_items_json_file):
         """Test main exits with error code when processing fails."""
@@ -552,7 +552,7 @@ class TestMainFunction:
         
         assert exc_info.value.code == 1
     
-    @patch('src.batch_stac_task_runner.process_batch_with_progress')
+    @patch('src.stac_creation.batch_task_runner.process_batch_with_progress')
     def test_full_stac_task_execution_flow(self, mock_process_batch, temp_dir):
         """Test complete STAC task flow from file read to processing."""
         # Create work items file
