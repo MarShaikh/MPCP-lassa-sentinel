@@ -4,10 +4,12 @@ Handles work items, directories, progress tracking, and file cleanup.
 """
 import os
 import json
-from typing import List, Dict, Tuple
+import traceback
+from typing import List, Dict, Tuple, Callable
 from datetime import datetime
 
 from azure.storage.blob import BlobServiceClient
+from src.utils.azure_storage_utils import get_blob_service_client, ensure_container_exists
 
 def get_work_items_from_file(working_dir: str = None) -> List[Dict]:
     """
@@ -64,11 +66,11 @@ def setup_working_directories(base_dirs: List[str] = None) -> None:
 def create_chunks(work_items: List[Dict], chunk_size: int = 100) -> List[List[Dict]]:
     """
     Split work items into chunks for batch processing.
-    
+
     Parameters:
         work_items (list): List of work items
         chunk_size (int): Number of items per chunk
-    
+
     Returns:
         list: List of chunks (each chunk is a list of work items)
     """
@@ -77,6 +79,71 @@ def create_chunks(work_items: List[Dict], chunk_size: int = 100) -> List[List[Di
         chunk = work_items[i:i + chunk_size]
         chunks.append(chunk)
     return chunks
+
+
+def filter_existing_items(
+    work_items: List[Dict],
+    container_name: str,
+    path_constructor: Callable[[Dict], str],
+    ensure_container: bool = False
+) -> List[Dict]:
+    """
+    Generic function to filter work items based on existing blobs in Azure Storage.
+
+    This consolidates the common pattern of checking if output files already exist
+    and filtering out work items that don't need reprocessing.
+
+    Parameters:
+        work_items (List[Dict]): List of work items to filter
+        container_name (str): Name of the container to check for existing items
+        path_constructor (Callable): Function that takes a work_item dict and returns
+                                     the expected blob path string
+        ensure_container (bool): Whether to ensure the container exists before checking
+
+    Returns:
+        List[Dict]: Filtered list of work items that need processing
+
+    Raises:
+        Exception: If filtering fails (blob access issues, etc.)
+
+    Example:
+        >>> def construct_cog_path(item):
+        ...     return f"{item['year']}/nigeria-cog-{item['filename']}"
+        >>> filtered = filter_existing_items(
+        ...     work_items, "processed-cogs", construct_cog_path
+        ... )
+    """
+    try:
+        blob_service_client = get_blob_service_client()
+
+        # Optionally ensure container exists
+        if ensure_container:
+            ensure_container_exists(blob_service_client, container_name)
+
+        # Get container client and list all existing items
+        container_client = blob_service_client.get_container_client(container_name)
+        existing_items = {blob.name for blob in container_client.list_blobs()}
+
+        print(f"Found {len(existing_items)} existing items in {container_name} container")
+
+        # Filter work items using the path constructor callback
+        filtered_work_items = []
+        for work_item in work_items:
+            blob_path = path_constructor(work_item)
+
+            if blob_path not in existing_items:
+                filtered_work_items.append(work_item)
+
+        filtered_out_count = len(work_items) - len(filtered_work_items)
+        print(f"Filtered out {filtered_out_count} work items that already exist")
+        print(f"{len(filtered_work_items)} work items remain to process")
+
+        return filtered_work_items
+
+    except Exception as e:
+        print(f"Failed to filter work items: {e}")
+        traceback.print_exc()
+        raise
 
 
 def update_progress_file(

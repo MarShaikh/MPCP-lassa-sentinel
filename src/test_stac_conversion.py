@@ -7,6 +7,7 @@ import os
 import json
 from azure.storage.blob import ContainerClient, BlobServiceClient
 from azure.identity import DefaultAzureCredential
+from utils.azure_storage_utils import get_blob_service_client, ensure_container_exists
 
 # Import conversion functions
 from stac_conversion import process_cog_to_stac, save_stac_item_to_blob
@@ -175,19 +176,11 @@ def test_batch_simulation(max_files: int = 5, upload_to_blob: bool = False):
         # Setup blob service client if uploading
         blob_service_client = None
         if upload_to_blob:
-            blob_service_client = BlobServiceClient(
-                account_url=blob_domain,
-                credential=credential
-            )
+            blob_service_client = get_blob_service_client()
             
             # Check/create stac-items container
             stac_container_name = "stac-items"
-            try:
-                stac_container_client = blob_service_client.get_container_client(stac_container_name)
-                stac_container_client.get_container_properties()
-            except:
-                stac_container_client.create_container()
-                print(f"✅ Created container '{stac_container_name}'")
+            ensure_container_exists(blob_service_client, stac_container_name)
         
         # Get COG files
         directory_path = f"{year}/"
@@ -285,10 +278,7 @@ def test_all_1981_files(upload_to_blob: bool = False):
         # Setup blob service client if uploading
         blob_service_client = None
         if upload_to_blob:
-            blob_service_client = BlobServiceClient(
-                account_url=blob_domain,
-                credential=credential
-            )
+            blob_service_client = get_blob_service_client()
             
             # Check/create stac-items container
             stac_container_name = "stac-items"

@@ -22,9 +22,9 @@ from src.batch_stac_job_creator import (
     get_cog_files_to_process,
     filter_existing_stac_items,
     create_and_submit_tasks,
-    create_chunks,
     main
 )
+from src.utils.batch_task_utils import create_chunks
 
 
 class TestBatchStacJobCreatorIntegration:
@@ -112,7 +112,7 @@ class TestBatchStacJobCreatorIntegration:
 class TestGetCogFilesToProcess(TestBatchStacJobCreatorIntegration):
     """Tests for get_cog_files_to_process function."""
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_lists_cog_files_from_container(
         self, mock_credential, setup_test_containers, sample_cog_blobs
     ):
@@ -121,10 +121,10 @@ class TestGetCogFilesToProcess(TestBatchStacJobCreatorIntegration):
         
         connection_string = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
             real_blob_service = BlobServiceClient.from_connection_string(connection_string)
-            mock_blob_service.return_value = real_blob_service
-            
+            mock_blob_service.from_connection_string.return_value = real_blob_service
+
             work_items = get_cog_files_to_process()
         
         assert len(work_items) == 4
@@ -132,7 +132,7 @@ class TestGetCogFilesToProcess(TestBatchStacJobCreatorIntegration):
         assert all('filename' in item for item in work_items)
         assert all('blob_path' in item for item in work_items)
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_extracts_year_and_filename_correctly(
         self, mock_credential, setup_test_containers, sample_cog_blobs
     ):
@@ -141,10 +141,10 @@ class TestGetCogFilesToProcess(TestBatchStacJobCreatorIntegration):
         
         connection_string = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
             real_blob_service = BlobServiceClient.from_connection_string(connection_string)
-            mock_blob_service.return_value = real_blob_service
-            
+            mock_blob_service.from_connection_string.return_value = real_blob_service
+
             work_items = get_cog_files_to_process()
         
         # Find specific work item to verify structure
@@ -158,7 +158,7 @@ class TestGetCogFilesToProcess(TestBatchStacJobCreatorIntegration):
         assert item_1981_01['year'] == '1981'
         assert item_1981_01['blob_path'] == '1981/nigeria-cog-chirps-v2.0.1981.01.01.tif'
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_handles_empty_container(
         self, mock_credential, setup_test_containers
     ):
@@ -167,15 +167,15 @@ class TestGetCogFilesToProcess(TestBatchStacJobCreatorIntegration):
         
         connection_string = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
             real_blob_service = BlobServiceClient.from_connection_string(connection_string)
-            mock_blob_service.return_value = real_blob_service
-            
+            mock_blob_service.from_connection_string.return_value = real_blob_service
+
             work_items = get_cog_files_to_process()
         
         assert work_items == []
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_ignores_non_tif_files(
         self, mock_credential, setup_test_containers
     ):
@@ -198,15 +198,15 @@ class TestGetCogFilesToProcess(TestBatchStacJobCreatorIntegration):
             blob_client = container_client.get_blob_client(blob_path)
             blob_client.upload_blob(b'test data', overwrite=True)
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
             
             work_items = get_cog_files_to_process()
         
         assert len(work_items) == 2
         assert all(item['filename'].endswith('.tif') for item in work_items)
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_ignores_malformed_paths(
         self, mock_credential, setup_test_containers
     ):
@@ -229,8 +229,8 @@ class TestGetCogFilesToProcess(TestBatchStacJobCreatorIntegration):
             blob_client = container_client.get_blob_client(blob_path)
             blob_client.upload_blob(b'test data', overwrite=True)
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
             
             work_items = get_cog_files_to_process()
         
@@ -242,7 +242,7 @@ class TestGetCogFilesToProcess(TestBatchStacJobCreatorIntegration):
 class TestFilterExistingStacItems(TestBatchStacJobCreatorIntegration):
     """Tests for filter_existing_stac_items function."""
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_filters_when_all_exist(
         self, mock_credential, setup_test_containers
     ):
@@ -273,14 +273,14 @@ class TestFilterExistingStacItems(TestBatchStacJobCreatorIntegration):
             blob_client = stac_container.get_blob_client(stac_blob_path)
             blob_client.upload_blob(b'{"type": "Feature"}', overwrite=True)
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
-            
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
+
             filtered = filter_existing_stac_items(work_items)
         
         assert len(filtered) == 0
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_filters_when_none_exist(
         self, mock_credential, setup_test_containers
     ):
@@ -303,15 +303,15 @@ class TestFilterExistingStacItems(TestBatchStacJobCreatorIntegration):
             }
         ]
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
-            
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
+
             filtered = filter_existing_stac_items(work_items)
         
         assert len(filtered) == 2
         assert filtered == work_items
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_filters_partial_overlap(
         self, mock_credential, setup_test_containers
     ):
@@ -345,9 +345,9 @@ class TestFilterExistingStacItems(TestBatchStacJobCreatorIntegration):
         blob_client = stac_container.get_blob_client(stac_blob_path)
         blob_client.upload_blob(b'{"type": "Feature"}', overwrite=True)
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
-            
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
+
             filtered = filter_existing_stac_items(work_items)
         
         assert len(filtered) == 2
@@ -355,7 +355,7 @@ class TestFilterExistingStacItems(TestBatchStacJobCreatorIntegration):
         assert work_items[1] in filtered
         assert work_items[2] in filtered
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_handles_empty_input(
         self, mock_credential, setup_test_containers
     ):
@@ -365,14 +365,14 @@ class TestFilterExistingStacItems(TestBatchStacJobCreatorIntegration):
         connection_string = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
         blob_service = BlobServiceClient.from_connection_string(connection_string)
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
             
             filtered = filter_existing_stac_items([])
         
         assert filtered == []
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_correct_stac_filename_mapping(
         self, mock_credential, setup_test_containers
     ):
@@ -396,9 +396,9 @@ class TestFilterExistingStacItems(TestBatchStacJobCreatorIntegration):
         blob_client = stac_container.get_blob_client(stac_blob_path)
         blob_client.upload_blob(b'{"type": "Feature"}', overwrite=True)
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
-            
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
+
             filtered = filter_existing_stac_items(work_items)
         
         # Should be filtered out because .json version exists
@@ -489,7 +489,7 @@ class TestCreateBatchJob(TestBatchStacJobCreatorIntegration):
 class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
     """Tests for create_and_submit_tasks function."""
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_creates_tasks_with_correct_work_items(
         self, mock_credential, setup_test_containers, mock_batch_env_vars
     ):
@@ -519,8 +519,8 @@ class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
             ]
         ]
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
             
             create_and_submit_tasks(mock_batch_client, job_id, work_items_chunks)
         
@@ -533,7 +533,7 @@ class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
         
         assert len(tasks) == 2
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_uploads_work_items_to_task_data_container(
         self, mock_credential, setup_test_containers, mock_batch_env_vars
     ):
@@ -556,8 +556,8 @@ class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
             ]
         ]
 
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
 
             create_and_submit_tasks(mock_batch_client, job_id, work_items_chunks)
 
@@ -571,7 +571,7 @@ class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
         assert 'work_items.json' in blobs[0].name
         assert job_id in blobs[0].name
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_task_command_line_uses_stac_runner(
         self, mock_credential, setup_test_containers, mock_batch_env_vars
     ):
@@ -594,8 +594,8 @@ class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
             ]
         ]
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
             
             create_and_submit_tasks(mock_batch_client, job_id, work_items_chunks)
         
@@ -606,7 +606,7 @@ class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
         # Verify command line includes stac runner
         assert 'batch_stac_task_runner.py' in tasks[0].command_line
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_sets_correct_environment_variables(
         self, mock_credential, setup_test_containers, mock_batch_env_vars
     ):
@@ -629,8 +629,8 @@ class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
             ]
         ]
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
             
             create_and_submit_tasks(mock_batch_client, job_id, work_items_chunks)
         
@@ -645,7 +645,7 @@ class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
         assert 'STAC_CONTAINER_SAS' in command_line
         assert 'LOGS_CONTAINER_SAS' in command_line
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_generates_sas_tokens_with_correct_permissions(
         self, mock_credential, setup_test_containers, mock_batch_env_vars
     ):
@@ -668,8 +668,8 @@ class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
             ]
         ]
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
             
             # Should not raise any exceptions
             create_and_submit_tasks(mock_batch_client, job_id, work_items_chunks)
@@ -681,7 +681,7 @@ class TestCreateAndSubmitTasks(TestBatchStacJobCreatorIntegration):
 class TestMainIntegration(TestBatchStacJobCreatorIntegration):
     """Integration tests for the main workflow."""
     
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_main_no_cog_files_found(
         self, mock_credential, setup_test_containers, mock_batch_env_vars
     ):
@@ -690,18 +690,18 @@ class TestMainIntegration(TestBatchStacJobCreatorIntegration):
         
         connection_string = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
             real_blob_service = BlobServiceClient.from_connection_string(connection_string)
             mock_blob_service.return_value = real_blob_service
             
             # Should exit gracefully
             main()
     
-    @patch('src.batch_stac_job_creator.create_batch_job')
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.create_batch_job_with_pool')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_main_all_items_already_processed(
         self, mock_credential, mock_create_job,
-        setup_test_containers, sample_cog_blobs, sample_existing_stac_items, 
+        setup_test_containers, sample_cog_blobs, sample_existing_stac_items,
         mock_batch_env_vars
     ):
         """Test main function when all COG files already have STAC items."""
@@ -717,17 +717,17 @@ class TestMainIntegration(TestBatchStacJobCreatorIntegration):
             blob_client = stac_container.get_blob_client(stac_path)
             blob_client.upload_blob(b'{"type": "Feature"}', overwrite=True)
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
             
             main()
         
         # Batch job should not be created
         mock_create_job.assert_not_called()
     
-    @patch('src.batch_stac_job_creator.create_batch_job')
-    @patch('src.batch_stac_job_creator.create_and_submit_tasks')
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.create_batch_job_with_pool')
+    @patch('src.utils.azure_batch_utils.create_and_submit_tasks_with_config')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_main_end_to_end_with_azurite(
         self, mock_credential, mock_submit_tasks, mock_create_job,
         setup_test_containers, sample_cog_blobs, sample_existing_stac_items,
@@ -742,30 +742,30 @@ class TestMainIntegration(TestBatchStacJobCreatorIntegration):
         mock_batch_client = MagicMock()
         mock_create_job.return_value = (mock_batch_client, 'test-stac-job-303')
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
             
             main()
         
         # Verify batch job was created
         mock_create_job.assert_called_once()
-        
+
         # Verify tasks were submitted
         mock_submit_tasks.assert_called_once()
-        
+
         # Verify filtered work items (should exclude the 2 existing STAC items)
-        submit_call_args = mock_submit_tasks.call_args[0]
-        work_items_chunks = submit_call_args[2]
-        
+        # After refactoring, function is called with keyword arguments
+        work_items_chunks = mock_submit_tasks.call_args.kwargs['work_items_chunks']
+
         # Flatten chunks to count total items
         total_items = sum(len(chunk) for chunk in work_items_chunks)
-        
+
         # Should have 4 COGs minus 2 existing STAC items = 2 items to process
         assert total_items == 2
     
-    @patch('src.batch_stac_job_creator.create_batch_job')
-    @patch('src.batch_stac_job_creator.create_and_submit_tasks')
-    @patch('src.batch_stac_job_creator.DefaultAzureCredential')
+    @patch('src.utils.azure_batch_utils.create_batch_job_with_pool')
+    @patch('src.utils.azure_batch_utils.create_and_submit_tasks_with_config')
+    @patch('src.utils.azure_storage_utils.DefaultAzureCredential')
     def test_main_creates_correct_number_of_tasks(
         self, mock_credential, mock_submit_tasks, mock_create_job,
         setup_test_containers, mock_batch_env_vars
@@ -786,16 +786,16 @@ class TestMainIntegration(TestBatchStacJobCreatorIntegration):
         mock_batch_client = MagicMock()
         mock_create_job.return_value = (mock_batch_client, 'test-stac-job-404')
         
-        with patch('src.batch_stac_job_creator.BlobServiceClient') as mock_blob_service:
-            mock_blob_service.return_value = blob_service
+        with patch('src.utils.azure_storage_utils.BlobServiceClient') as mock_blob_service:
+            mock_blob_service.from_connection_string.return_value = blob_service
             
             main()
         
         # Verify tasks were submitted
         mock_submit_tasks.assert_called_once()
-        
+
         # Verify number of chunks (150 items / 100 per chunk = 2 chunks)
-        submit_call_args = mock_submit_tasks.call_args[0]
-        work_items_chunks = submit_call_args[2]
-        
+        # After refactoring, function is called with keyword arguments
+        work_items_chunks = mock_submit_tasks.call_args.kwargs['work_items_chunks']
+
         assert len(work_items_chunks) == 2

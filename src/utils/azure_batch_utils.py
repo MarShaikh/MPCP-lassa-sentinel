@@ -4,11 +4,14 @@ Consolidates duplicate code from job creators.
 """
 import os
 import json
+import traceback
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Callable
 
 from azure.batch import BatchServiceClient
 from azure.batch.models import JobAddParameter, PoolInformation, TaskAddParameter, ResourceFile
+from azure.batch.custom.custom_errors import CreateTasksErrorException
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.storage.blob import (
     BlobServiceClient, generate_blob_sas, generate_container_sas,
@@ -251,3 +254,200 @@ def upload_work_items_and_create_task(
     )
 
     return task
+
+
+def handle_batch_task_creation_error(error: CreateTasksErrorException) -> None:
+    """
+    Handle CreateTasksErrorException by printing detailed error information.
+
+    This utility consolidates duplicate error handling logic from job creators.
+
+    Parameters:
+        error (CreateTasksErrorException): The exception from batch task creation
+    """
+    print("An error occurred while adding tasks.")
+    print("Printing details for each failed task...")
+
+    for failure in error.failure_tasks:
+        print(f"  - Task ID: {failure.task_id}")
+        print(f"    - Error Code: {failure.error.code}")
+        print(f"    - Error Message: {failure.error.message}")
+
+        if failure.error.values:
+            for detail in failure.error.values:
+                print(f"      - Detail Key: {detail.key}, Value: {detail.value}")
+
+    traceback.print_exc()
+
+
+@dataclass
+class BatchTaskConfig:
+    """
+    Configuration for batch task creation and submission.
+
+    This dataclass encapsulates the differences between job types (CHIRPS, STAC, etc.)
+    to enable code reuse in task submission logic.
+    """
+    job_type: str
+    script_path: str
+    container_configs: Dict[str, Dict[str, bool]]
+    env_var_mapping: Dict[str, str]  # Maps container name to env var name
+    task_id_prefix: str = "task"
+    ensure_task_data_container: bool = False
+
+
+# Pre-defined configurations for common job types
+CHIRPS_TASK_CONFIG = BatchTaskConfig(
+    job_type="CHIRPS",
+    script_path="src/batch_processing/batch_task_runner.py",
+    container_configs={
+        "processed-cogs": {"read": True, "write": True, "create": True, "list": True},
+        "raw-data": {"read": True, "write": True, "create": True, "list": True},
+        "batch-logs": {"read": True, "write": True, "create": True, "list": True}
+    },
+    env_var_mapping={
+        "processed-cogs": "COG_CONTAINER_SAS",
+        "raw-data": "RAW_CONTAINER_SAS",
+        "batch-logs": "LOGS_CONTAINER_SAS"
+    },
+    task_id_prefix="task",
+    ensure_task_data_container=False
+)
+
+STAC_TASK_CONFIG = BatchTaskConfig(
+    job_type="STAC",
+    script_path="src/batch_stac_task_runner.py",
+    container_configs={
+        "processed-cogs": {"read": True, "list": True},
+        "stac-items": {"read": True, "write": True, "create": True, "list": True},
+        "batch-logs": {"read": True, "write": True, "create": True, "list": True}
+    },
+    env_var_mapping={
+        "processed-cogs": "COG_CONTAINER_SAS",
+        "stac-items": "STAC_CONTAINER_SAS",
+        "batch-logs": "LOGS_CONTAINER_SAS"
+    },
+    task_id_prefix="stac_task",
+    ensure_task_data_container=True
+)
+
+
+def create_and_submit_tasks_with_config(
+    batch_client,
+    job_id: str,
+    work_items_chunks: List[List[Dict]],
+    config: BatchTaskConfig
+) -> None:
+    """
+    Generic function to create and submit tasks with configuration.
+
+    This consolidates the duplicate create_and_submit_tasks logic from both
+    job creators by using a configuration object to specify job-type-specific
+    behavior.
+
+    Parameters:
+        batch_client: Azure Batch service client
+        job_id (str): Batch job ID
+        work_items_chunks (List[List[Dict]]): Chunks of work items to process
+        config (BatchTaskConfig): Configuration specifying job-type-specific behavior
+    """
+    # Setup Azure Storage
+    blob_service_client, container_name = create_task_data_blob_client(
+        ensure_container=config.ensure_task_data_container
+    )
+
+    # Generate SAS tokens for containers
+    sas_tokens = generate_sas_tokens_for_containers(config.container_configs)
+
+    # Build environment variables using the mapping
+    STORAGE_ACCOUNT_URL = os.environ["STORAGE_ACCOUNT_URL"]
+    env_vars = {"STORAGE_ACCOUNT_URL": STORAGE_ACCOUNT_URL}
+
+    for container_name_key, env_var_name in config.env_var_mapping.items():
+        env_vars[env_var_name] = sas_tokens[container_name_key]
+
+    # Create tasks
+    tasks = []
+    for i, chunk in enumerate(work_items_chunks):
+        task_id = f"{config.task_id_prefix}{i:03d}"
+
+        task = upload_work_items_and_create_task(
+            blob_service_client=blob_service_client,
+            container_name=container_name,
+            job_id=job_id,
+            task_id=task_id,
+            work_items_chunk=chunk,
+            env_vars=env_vars,
+            script_path=config.script_path
+        )
+        tasks.append(task)
+
+    # Submit all tasks at once
+    print(f"Submitting {len(tasks)} tasks to job {job_id}")
+    batch_client.task.add_collection(job_id, tasks)
+    print("All tasks submitted successfully!")
+
+
+def run_batch_job_workflow(
+    work_items: List[Dict],
+    filter_func: Callable[[List[Dict]], List[Dict]],
+    job_pool_name: str,
+    task_config: BatchTaskConfig,
+    chunk_size: int = 100,
+    job_name: str = "batch job"
+) -> None:
+    """
+    Generic workflow orchestrator for batch job creation and submission.
+
+    This consolidates the common pattern used in main() functions:
+    filter items -> create chunks -> create job -> submit tasks -> handle errors
+
+    Parameters:
+        work_items (List[Dict]): Initial list of work items to process
+        filter_func (Callable): Function to filter out already-processed items
+        job_pool_name (str): Name of the batch pool to use
+        task_config (BatchTaskConfig): Configuration for task creation
+        chunk_size (int): Number of items per task chunk
+        job_name (str): Display name for logging
+
+    Raises:
+        SystemExit: If no work items remain after filtering or if job creation fails
+    """
+    from src.utils.batch_task_utils import create_chunks
+
+    # Validate initial work items
+    if not work_items:
+        print(f"No work items found for {job_name}. Exiting.")
+        return
+
+    print(f"Found {len(work_items)} total work items for {job_name}")
+
+    # Filter out already-processed items
+    filtered_work_items = filter_func(work_items)
+
+    if not filtered_work_items:
+        print(f"All work items already processed for {job_name}! No new job needed.")
+        return
+
+    # Create chunks for parallel processing
+    work_items_chunks = create_chunks(filtered_work_items, chunk_size=chunk_size)
+
+    print(f"Created {len(work_items_chunks)} chunks to be submitted as tasks.")
+
+    # Create and submit batch job
+    try:
+        batch_client, job_id = create_batch_job_with_pool(job_pool_name)
+        create_and_submit_tasks_with_config(
+            batch_client=batch_client,
+            job_id=job_id,
+            work_items_chunks=work_items_chunks,
+            config=task_config
+        )
+        print(f"Job '{job_id}' created with {len(work_items_chunks)} tasks.")
+
+    except CreateTasksErrorException as e:
+        handle_batch_task_creation_error(e)
+
+    except Exception as e:
+        print(f"An error occurred during job or task creation: {e}")
+        traceback.print_exc()
