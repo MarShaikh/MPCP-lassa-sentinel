@@ -25,6 +25,18 @@ Verification: Once the ingestion process is complete, the verify_ingestion funct
 Error Handling: The script includes error handling to manage potential issues during the ingestion process, such as HTTP errors.
 STAC Validation: It validates the STAC items before ingestion and even attempts to fix common validation errors, ensuring data quality.
 In essence, this script is a robust tool for automating the transfer of geospatial data from a public repository (Planetary Computer) to a private or custom catalog (GeoCatalog), with features for authentication, data preparation, batch processing, monitoring, and verification.
+
+# example usage
+  python src/ingestion/ingestion_from_datacatalog.py \
+    --geocatalog-url <geocatalog_uri> \
+    --pc-collection <collection_name> \
+    --bbox-aoi <min_lon> <min_lat> <max_lon> <max_lat> \
+    --date-range "<start_date>/<end_date>" \
+    --region <region> \
+    --batch-size 100 \
+    --api-version "2025-04-30-preview" \
+    --mpc-app-id "https://geocatalog.spatio.azure.com"
+
 """
 
 import json
