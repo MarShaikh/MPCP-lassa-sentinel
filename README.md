@@ -218,8 +218,7 @@ MPCP_lassa_sentinel/
 │   ├── TESTING.md
 │   └── TROUBLESHOOTING.md
 ├── test_suite/                 # Unit and integration tests
-├── notebooks/                  # Jupyter notebooks for exploration
-└── CLAUDE.md                   # Project architecture guide
+└── notebooks/                  # Jupyter notebooks for exploration
 ```
 
 ## Documentation
@@ -230,7 +229,6 @@ Comprehensive guides are available in the [`docs/`](./docs/) directory:
 - **[BATCH_AND_PROCESSING.md](./docs/BATCH_AND_PROCESSING.md)** - Azure Batch configuration, ingestion sources, and processing pipelines
 - **[TESTING.md](./docs/TESTING.md)** - Running unit and integration tests with Azurite
 - **[TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)** - Common issues and solutions
-- **[CLAUDE.md](./CLAUDE.md)** - Detailed project architecture and design patterns
 
 ## Main Workflows
 
