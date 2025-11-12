@@ -45,48 +45,75 @@ The system is organized into modular components:
 
 ### Processing Flow
 
-```mermaid
-flowchart LR
-    subgraph workflow1[" WORKFLOW 1: Direct Ingestion from Planetary Computer "]
-        direction LR
-        MPC1[("Microsoft Planetary<br/>Computer<br/>(STAC Catalog)")] --> Search["Search STAC API"]
-        Search --> Validate["Validate Items<br/>(Fix metadata)"]
-        Validate --> GC1["Azure GeoCatalog<br/>(Direct Ingestion)"]
-    end
+**WORKFLOW 1: Direct Ingestion from Planetary Computer**
 
-    style workflow1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
-    style MPC1 fill:#4caf50,stroke:#2e7d32,color:#fff
-    style Search fill:#fff,stroke:#333,stroke-width:2px
-    style Validate fill:#fff,stroke:#333,stroke-width:2px
-    style GC1 fill:#9c27b0,stroke:#4a148c,color:#fff
+```
+┌─────────────────────────┐
+│ Microsoft Planetary     │
+│ Computer                │
+│ (STAC Catalog)          │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Search STAC API         │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Validate Items          │
+│ (Fix metadata)          │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Azure GeoCatalog        │
+│ (Direct Ingestion)      │
+└─────────────────────────┘
 ```
 
-```mermaid
-flowchart LR
-    subgraph workflow2[" WORKFLOW 2: CHIRPS Data Processing Pipeline "]
-        direction LR
+**WORKFLOW 2: CHIRPS Data Processing Pipeline**
 
-        CHIRPS[("CHIRPS Data<br/>(UCSB)")] --> Batch1["Azure Batch Operation 1<br/>(Extract URLs → Download TIFFs → Convert to COGs)"]
-
-        Batch1 --> BS1[("Azure Blob Storage<br/>processed-cogs")]
-
-        BS1 --> Batch2["Azure Batch Operation 2<br/>(Generate STAC Items)"]
-
-        Batch2 --> BS2[("Azure Blob Storage<br/>stac-items")]
-
-        BS2 --> Script["Bulk Ingestion Script<br/>(orchestrate_catalog_ingestion.py)"]
-
-        Script --> GC2["Azure GeoCatalog<br/>(Bulk Ingestion)"]
-    end
-
-    style workflow2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
-    style CHIRPS fill:#4caf50,stroke:#2e7d32,color:#fff
-    style Batch1 fill:#ffebee,stroke:#c62828,stroke-width:2px
-    style Batch2 fill:#ffebee,stroke:#c62828,stroke-width:2px
-    style BS1 fill:#2196f3,stroke:#0d47a1,color:#fff
-    style BS2 fill:#2196f3,stroke:#0d47a1,color:#fff
-    style Script fill:#fff,stroke:#333,stroke-width:2px
-    style GC2 fill:#9c27b0,stroke:#4a148c,color:#fff
+```
+┌─────────────────────────┐
+│ CHIRPS Data             │
+│ (UCSB)                  │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────┐
+│ Azure Batch Operation 1                                 │
+│ (Extract URLs → Download TIFFs → Convert to COGs)       │
+└───────────┬─────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Azure Blob Storage      │
+│ (processed-cogs)        │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────┐
+│ Azure Batch Operation 2                                 │
+│ (Generate STAC Items)                                   │
+└───────────┬─────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Azure Blob Storage      │
+│ (stac-items)            │
+└───────────┬─────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────┐
+│ Bulk Ingestion Script                                   │
+└───────────┬─────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────┐
+│ Azure GeoCatalog        │
+│ (Bulk Ingestion)        │
+└─────────────────────────┘
 ```
 
 ## Quick Start
