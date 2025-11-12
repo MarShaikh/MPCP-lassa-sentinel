@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone
 
-from src.stac_conversion import (
+from src.stac_creation.stac_conversion import (
     extract_metadata_from_filename_chirps,
     create_stac_item_from_cog_chirps,
     enhance_stac_item_with_metadata_chirps,
@@ -80,8 +80,8 @@ class TestExtractMetadataFromFilename:
 class TestCreateStacItemFromCog:
     """Tests for create_stac_item_from_cog_chirps function."""
     
-    @patch('src.stac_conversion.create_stac_item')
-    @patch('src.stac_conversion.MemoryFile')
+    @patch('src.stac_creation.stac_conversion.create_stac_item')
+    @patch('src.stac_creation.stac_conversion.MemoryFile')
     def test_create_stac_item_success(self, mock_memory_file, mock_create_stac_item):
         """Test successful STAC item creation from COG."""
         # Mock blob client
@@ -152,8 +152,8 @@ class TestCreateStacItemFromCog:
         # Verify return
         assert result == mock_stac_item
     
-    @patch('src.stac_conversion.create_stac_item')
-    @patch('src.stac_conversion.MemoryFile')
+    @patch('src.stac_creation.stac_conversion.create_stac_item')
+    @patch('src.stac_creation.stac_conversion.MemoryFile')
     def test_create_stac_item_with_properties(self, mock_memory_file, mock_create_stac_item):
         """Test that STAC item is created with correct properties."""
         # Setup mocks
@@ -195,7 +195,7 @@ class TestCreateStacItemFromCog:
         assert properties['raster:bands'][0]['spatial_resolution'] == 0.05
         assert properties['file:size'] == 2048000
     
-    @patch('src.stac_conversion.MemoryFile')
+    @patch('src.stac_creation.stac_conversion.MemoryFile')
     def test_create_stac_item_blob_download_failure(self, mock_memory_file):
         """Test handling of blob download failure."""
         mock_blob_client = MagicMock()
@@ -206,8 +206,8 @@ class TestCreateStacItemFromCog:
                 mock_blob_client, "test.tif", "https://test.url", "cogs", "1981"
             )
     
-    @patch('src.stac_conversion.create_stac_item') 
-    @patch('src.stac_conversion.MemoryFile')        
+    @patch('src.stac_creation.stac_conversion.create_stac_item') 
+    @patch('src.stac_creation.stac_conversion.MemoryFile')        
     def test_create_stac_item_rasterio_failure(self, mock_memory_file, mock_create_stac_item):
         """Test handling of rasterio processing failure."""
         mock_blob_client = MagicMock()
@@ -310,9 +310,9 @@ class TestEnhanceStacItemWithMetadata:
 class TestProcessCogToStac:
     """Tests for process_cog_to_stac orchestration function."""
     
-    @patch('src.stac_conversion.enhance_stac_item_with_metadata_chirps')
-    @patch('src.stac_conversion.create_stac_item_from_cog_chirps')
-    @patch('src.stac_conversion.extract_metadata_from_filename_chirps')
+    @patch('src.stac_creation.stac_conversion.enhance_stac_item_with_metadata_chirps')
+    @patch('src.stac_creation.stac_conversion.create_stac_item_from_cog_chirps')
+    @patch('src.stac_creation.stac_conversion.extract_metadata_from_filename_chirps')
     def test_process_cog_to_stac_success(self, mock_extract, mock_create, mock_enhance):
         """Test complete COG to STAC conversion process."""
         # Setup mocks
@@ -370,7 +370,7 @@ class TestProcessCogToStac:
         assert result['id'] == 'test-item'
         assert result['properties']['product_type'] == 'chirps'
     
-    @patch('src.stac_conversion.extract_metadata_from_filename_chirps')
+    @patch('src.stac_creation.stac_conversion.extract_metadata_from_filename_chirps')
     def test_process_cog_to_stac_metadata_extraction_failure(self, mock_extract):
         """Test handling of metadata extraction failure."""
         mock_blob_client = MagicMock()
@@ -383,8 +383,8 @@ class TestProcessCogToStac:
                 mock_blob_client, filename, "https://test.url", "cogs", "1981"
             )
     
-    @patch('src.stac_conversion.create_stac_item_from_cog_chirps')
-    @patch('src.stac_conversion.extract_metadata_from_filename_chirps')
+    @patch('src.stac_creation.stac_conversion.create_stac_item_from_cog_chirps')
+    @patch('src.stac_creation.stac_conversion.extract_metadata_from_filename_chirps')
     def test_process_cog_to_stac_creation_failure(self, mock_extract, mock_create):
         """Test handling of STAC item creation failure."""
         mock_blob_client = MagicMock()
@@ -409,7 +409,7 @@ class TestProcessCogToStac:
 class TestSaveStacItemToBlob:
     """Tests for save_stac_item_to_blob function."""
     
-    @patch('src.stac_conversion.json.dumps')
+    @patch('src.stac_creation.stac_conversion.json.dumps')
     def test_save_stac_item_success(self, mock_json_dumps):
         """Test successful saving of STAC item to blob."""
         # Mock blob service client
@@ -563,8 +563,8 @@ class TestSaveStacItemToBlob:
 class TestStacConversionIntegration:
     """Integration tests for the full STAC conversion workflow."""
     
-    @patch('src.stac_conversion.enhance_stac_item_with_metadata_chirps')
-    @patch('src.stac_conversion.create_stac_item_from_cog_chirps')
+    @patch('src.stac_creation.stac_conversion.enhance_stac_item_with_metadata_chirps')
+    @patch('src.stac_creation.stac_conversion.create_stac_item_from_cog_chirps')
     def test_full_workflow_with_real_filename_parsing(self, mock_create, mock_enhance):
         """Test the full workflow with real filename parsing (no mock on extract)."""
         mock_blob_client = MagicMock()
@@ -604,8 +604,8 @@ class TestStacConversionIntegration:
         assert metadata['date'].month == 1
         assert metadata['date'].day == 1
     
-    @patch('src.stac_conversion.save_stac_item_to_blob')
-    @patch('src.stac_conversion.process_cog_to_stac')
+    @patch('src.stac_creation.stac_conversion.save_stac_item_to_blob')
+    @patch('src.stac_creation.stac_conversion.process_cog_to_stac')
     def test_process_and_save_workflow(self, mock_process, mock_save):
         """Test combining process_cog_to_stac with save_stac_item_to_blob."""
         mock_blob_client = MagicMock()

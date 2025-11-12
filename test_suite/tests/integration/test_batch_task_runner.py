@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock, call
 
-from src.batch_processing.batch_task_runner import (
+from src.cog_creation.batch_task_runner import (
     get_work_items_from_file,
     setup_working_directories,
     main
@@ -130,7 +130,7 @@ class TestSetupWorkingDirectories:
 class TestMainFunction:
     """Integration tests for main function."""
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     def test_main_success(self, mock_process_batch, mock_batch_task_env, 
                          work_items_json_file, sample_task_work_items):
         """Test successful execution of main function."""
@@ -145,7 +145,7 @@ class TestMainFunction:
         assert call_args == sample_task_work_items
         assert len(call_args) == 3
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     def test_main_with_empty_work_items(self, mock_process_batch, 
                                        mock_batch_task_env, empty_work_items_file):
         """Test main function with empty work items list."""
@@ -154,7 +154,7 @@ class TestMainFunction:
         # Should still call process_batch_with_progress with empty list
         mock_process_batch.assert_called_once_with([])
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     def test_main_exits_on_file_not_found(self, mock_process_batch, temp_dir):
         """Test main exits with error code when work items file not found."""
         env_vars = {
@@ -172,7 +172,7 @@ class TestMainFunction:
         # process_batch_with_progress should not be called
         mock_process_batch.assert_not_called()
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     def test_main_exits_on_json_error(self, mock_process_batch, 
                                      mock_batch_task_env, malformed_json_file):
         """Test main exits with error code on JSON parsing error."""
@@ -182,7 +182,7 @@ class TestMainFunction:
         assert exc_info.value.code == 1
         mock_process_batch.assert_not_called()
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     def test_main_exits_on_processing_error(self, mock_process_batch, 
                                            mock_batch_task_env, work_items_json_file):
         """Test main exits with error code when processing fails."""
@@ -195,7 +195,7 @@ class TestMainFunction:
         assert exc_info.value.code == 1
         mock_process_batch.assert_called_once()
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     @patch('builtins.print')
     def test_main_prints_task_id(self, mock_print, mock_process_batch, 
                                  mock_batch_task_env, work_items_json_file):
@@ -207,7 +207,7 @@ class TestMainFunction:
         task_id_printed = any('test_task_001' in str(call) for call in print_calls)
         assert task_id_printed
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     @patch('builtins.print')
     def test_main_prints_work_items_count(self, mock_print, mock_process_batch,
                                          mock_batch_task_env, work_items_json_file):
@@ -220,7 +220,7 @@ class TestMainFunction:
                           for call in print_calls)
         assert count_printed
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     def test_main_uses_default_task_id(self, mock_process_batch, temp_dir, 
                                       work_items_json_file):
         """Test main uses 'unknown_task' when AZ_BATCH_TASK_ID not set."""
@@ -242,7 +242,7 @@ class TestMainFunction:
 class TestEndToEndIntegration:
     """End-to-end integration tests for the task runner."""
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     def test_full_task_execution_flow(self, mock_process_batch, temp_dir):
         """Test complete flow from file read to processing."""
         # Create work items file
@@ -273,7 +273,7 @@ class TestEndToEndIntegration:
             assert call_args[0]['year'] == '1981'
             assert call_args[1]['url'] == 'https://test.url/1981.01.02.tif.gz'
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     def test_handles_large_work_items_list(self, mock_process_batch, temp_dir):
         """Test handling large number of work items."""
         # Create 100 work items
@@ -299,7 +299,7 @@ class TestEndToEndIntegration:
             assert call_args[0]['url'].endswith('01.tif.gz')
             assert call_args[99]['url'].endswith('00.tif.gz')
     
-    @patch('src.batch_processing.batch_task_runner.process_batch_with_progress')
+    @patch('src.cog_creation.batch_task_runner.process_batch_with_progress')
     def test_work_items_with_different_years(self, mock_process_batch, temp_dir):
         """Test processing work items from multiple years."""
         work_items = [

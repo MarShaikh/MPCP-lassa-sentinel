@@ -15,43 +15,12 @@ from azure.identity import DefaultAzureCredential
 # Import the STAC conversion functions
 # Try importing from the installed package structure first (for tests)
 try:
-    from src.stac_conversion import process_cog_to_stac, save_stac_item_to_blob
+    from src.stac_creation.stac_conversion import process_cog_to_stac, save_stac_item_to_blob
+    from src.utils.batch_task_utils import get_work_items_from_file, setup_working_directories, update_progress_file
 except ImportError:
     # Fall back to direct import (for Azure Batch execution)
     from stac_conversion import process_cog_to_stac, save_stac_item_to_blob
-
-
-def get_work_items_from_file() -> List[Dict]:
-    """
-    Reads work items from a JSON file in the task's working directory.
-    The file is downloaded by the Batch service via a ResourceFile.
-    
-    Returns:
-        List[Dict]: List of work items to process
-    """
-    # AZ_BATCH_TASK_WORKING_DIR is a default environment variable set by Batch.
-    task_working_dir = os.environ.get("AZ_BATCH_TASK_WORKING_DIR")
-    file_path = os.path.join(task_working_dir, "work_items.json")
-    
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Work items file not found at: {file_path}")
-    
-    try:
-        with open(file_path, 'r') as f:
-            work_items = json.load(f)
-        return work_items
-    except (json.JSONDecodeError, IOError) as e:
-        raise ValueError(f"Failed to read or parse work_items.json: {e}")
-
-
-def setup_working_directories():
-    """
-    Creates necessary directories for processing on the VM.
-    """
-    base_dir = "/tmp/stac_processing"
-    os.makedirs(os.path.join(base_dir, "stac-items"), exist_ok=True)
-    os.makedirs("/tmp/batch-logs", exist_ok=True)
-    return base_dir
+    from utils.batch_task_utils import get_work_items_from_file, setup_working_directories, update_progress_file
 
 
 def process_single_cog(work_item: Dict, cog_container_client: ContainerClient,
@@ -163,13 +132,18 @@ def process_batch_with_progress(work_items: List[Dict]):
         
         # Update progress every 10 items or at the end
         if (i + 1) % 10 == 0 or i == len(work_items) - 1:
+            # Convert completed/failed to format expected by utility function
+            completed_items = [c["stac_path"] for c in completed]
+            failed_items = [{"path": f["blob_path"], "error": f["error"]} for f in failed]
+
             update_progress_file(
                 task_id=task_id,
-                completed=completed.copy(), # Create a snapshot
-                failed=failed.copy(),       # Create a snapshot
+                completed=completed_items,
+                failed=failed_items,
                 total=len(work_items),
                 storage_account_url=storage_account_url,
-                logs_sas=logs_sas
+                logs_sas=logs_sas,
+                progress_file_prefix="stac_"
             )
     
     print(f"Task {task_id}: Completed {len(completed)}/{len(work_items)} items successfully")
@@ -177,58 +151,6 @@ def process_batch_with_progress(work_items: List[Dict]):
         print(f"Failed items: {len(failed)}")
         for fail in failed[:5]:  # Show first 5 failures
             print(f"  - {fail['blob_path']}: {fail['error']}")
-
-
-def update_progress_file(task_id: str, completed: List[Dict], failed: List[Dict],
-                         total: int, storage_account_url: str, logs_sas: str):
-    """
-    Update progress file and upload to Azure Blob Storage.
-    
-    Parameters:
-        task_id (str): Task identifier
-        completed (List[Dict]): List of completed items
-        failed (List[Dict]): List of failed items
-        total (int): Total number of items to process
-        storage_account_url (str): Storage account URL
-        logs_sas (str): SAS token for logs container
-    """
-    progress_data = {
-        "task_id": task_id,
-        "timestamp": datetime.now().isoformat(),
-        "total_items": total,
-        "completed_count": len(completed),
-        "failed_count": len(failed),
-        "progress_percentage": (len(completed) / total * 100) if total > 0 else 0,
-        "completed_items": [c["stac_path"] for c in completed[-10:]],  # Last 10
-        "failed_items": [{"path": f["blob_path"], "error": f["error"]} for f in failed]
-    }
-    
-    # Save locally first
-    temp_dir = "/tmp/batch-logs"
-    os.makedirs(temp_dir, exist_ok=True)
-    file_name = f"stac_{task_id}_progress.json"
-    local_file_path = os.path.join(temp_dir, file_name)
-    
-    with open(local_file_path, 'w') as f:
-        json.dump(progress_data, f, indent=2)
-    
-    # Upload to blob storage
-    try:
-        blob_service_client = BlobServiceClient(
-            account_url=f"{storage_account_url}?{logs_sas}"
-        )
-        blob_client = blob_service_client.get_blob_client(
-            container="batch-logs",
-            blob=file_name
-        )
-        
-        with open(local_file_path, 'rb') as f:
-            blob_client.upload_blob(f, overwrite=True)
-        
-        print(f"Progress updated: {len(completed)}/{total} completed")
-        
-    except Exception as e:
-        print(f"Failed to upload progress file: {e}")
 
 
 def main():
@@ -239,9 +161,12 @@ def main():
         print("Starting STAC batch task runner...")
         task_id = os.environ.get('AZ_BATCH_TASK_ID', 'unknown_task')
         print(f"Task ID: {task_id}")
-        
+
         # Setup working directories
-        setup_working_directories()
+        setup_working_directories([
+            "/tmp/stac_processing/stac-items",
+            "/tmp/batch-logs"
+        ])
         
         # Get work items from file
         work_items = get_work_items_from_file()

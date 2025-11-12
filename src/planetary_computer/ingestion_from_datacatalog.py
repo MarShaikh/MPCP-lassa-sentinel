@@ -5,16 +5,16 @@ Here's a breakdown of its key components:
 
 1. Authentication and Setup:
 
-Azure Authentication: It uses the azure-identity library to authenticate with Azure services. Specifically, AzureCliCredential allows the script to use the credentials of a user who is logged into the Azure CLI.[1][2] This is a common practice for local development and debugging.[1]
+Azure Authentication: It uses the azure-identity library to authenticate with Azure services. Specifically, AzureCliCredential allows the script to use the credentials of a user who is logged into the Azure CLI. This is a common practice for local development and debugging.
 Configuration: The script is configured with URLs for the GeoCatalog and the Planetary Computer, along with API versions and application IDs.
 
 2. Data Ingestion Process:
 
 Optimized Batch Ingestion: The core of the script is the optimized_batch_ingest function. This function is responsible for fetching data from the Planetary Computer and ingesting it into the GeoCatalog.
-Data Discovery: It uses the pystac-client library to search for geospatial data on the Planetary Computer based on specified criteria like collection, bounding box, and date range.[3][4][5] The planetary-computer library is used in conjunction with pystac-client to handle the specifics of interacting with the Planetary Computer's STAC API.[6][7]
+Data Discovery: It uses the pystac-client library to search for geospatial data on the Planetary Computer based on specified criteria like collection, bounding box, and date range. The planetary-computer library is used in conjunction with pystac-client to handle the specifics of interacting with the Planetary Computer's STAC API.
 Data Preparation: Before ingestion, the script prepares the data. This includes creating a new collection in the GeoCatalog, validating and fixing STAC items (the metadata for geospatial data), and removing certain non-static assets.
 Batching: To handle large amounts of data efficiently, the script processes and sends the data in batches.
-HTTP Requests: The requests library is used to make HTTP requests to the GeoCatalog's API for creating collections and ingesting data.[8][9][10]
+HTTP Requests: The requests library is used to make HTTP requests to the GeoCatalog's API for creating collections and ingesting data.
 
 3. Monitoring and Verification:
 
@@ -25,12 +25,25 @@ Verification: Once the ingestion process is complete, the verify_ingestion funct
 Error Handling: The script includes error handling to manage potential issues during the ingestion process, such as HTTP errors.
 STAC Validation: It validates the STAC items before ingestion and even attempts to fix common validation errors, ensuring data quality.
 In essence, this script is a robust tool for automating the transfer of geospatial data from a public repository (Planetary Computer) to a private or custom catalog (GeoCatalog), with features for authentication, data preparation, batch processing, monitoring, and verification.
+
+# example usage
+  python src/ingestion/ingestion_from_datacatalog.py \
+    --geocatalog-url <geocatalog_uri> \
+    --pc-collection <collection_name> \
+    --bbox-aoi <min_lon> <min_lat> <max_lon> <max_lat> \
+    --date-range "<start_date>/<end_date>" \
+    --region <region> \
+    --batch-size 100 \
+    --api-version "2025-04-30-preview" \
+    --mpc-app-id "https://geocatalog.spatio.azure.com"
+
 """
 
 import json
 import random
 import time
 import re
+import argparse
 from datetime import datetime, timedelta
 from typing import List
 
@@ -124,24 +137,65 @@ def fix_classification_names(item: Item, auto_generate_names=True):
     
     return fixed_assets
 
-def optimized_batch_ingest(batch_size: int):
+def validate_collection_exists(collection_name: str) -> bool:
+    """
+    Validate that a collection exists on Planetary Computer.
+
+    Args:
+        collection_name: The collection ID to validate
+
+    Returns:
+        bool: True if collection exists, False otherwise
+    """
+    try:
+        print(f"Validating collection '{collection_name}' exists on Planetary Computer...")
+        response = requests.get(
+            f"https://planetarycomputer.microsoft.com/api/stac/v1/collections/{collection_name}",
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            print(f"Collection '{collection_name}' found on Planetary Computer")
+            return True
+        elif response.status_code == 404:
+            print(f"Collection '{collection_name}' not found on Planetary Computer")
+            print(f"  Please check the collection name or visit:")
+            print(f"  https://planetarycomputer.microsoft.com/catalog")
+            return False
+        else:
+            print(f"Unexpected status code {response.status_code} when checking collection")
+            return False
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error validating collection: {e}")
+        return False
+
+def optimized_batch_ingest(batch_size: int, region: str = "nigeria"):
     """
     Optimized batch ingestion using ItemCollection endpoint.
     This ingests items directly from Planetary Computer without storing any data.
-    
+
     Args:
         batch_size: Number of items to send per request (max ~500 recommended)
+        region: Region name to use in collection ID (e.g., "nigeria", "ghana", "global")
     """
-    
+
+    # Validate collection exists before proceeding
+    if not validate_collection_exists(pc_collection):
+        raise ValueError(
+            f"Collection '{pc_collection}' does not exist on Planetary Computer. "
+            f"Please verify the collection name at https://planetarycomputer.microsoft.com/catalog"
+        )
+
     print("Step 1: Fetching collection metadata from Planetary Computer...")
     response = requests.get(
         f"https://planetarycomputer.microsoft.com/api/stac/v1/collections/{pc_collection}"
     )
     raise_for_status(response)
     stac_collection = response.json()
-    
-    # Prepare collection for ingestion
-    collection_id = f"{pc_collection}-nigeria-{random.randint(0, 1000)}"
+
+    # Prepare collection for ingestion with configurable region
+    collection_id = f"{pc_collection}-{region}-{random.randint(0, 1000)}"
     stac_collection["id"] = collection_id
     stac_collection["title"] = collection_id
     
@@ -365,71 +419,150 @@ def monitor_ingestion_operations(operation_ids: List[str], timeout_seconds: int 
         time.sleep(30)  # Check every 30 seconds
     
     if time.time() - start_time >= timeout_seconds:
-        print(f"\n⚠️ Timeout reached after {timeout_seconds} seconds")
+        print(f"\nTimeout reached after {timeout_seconds} seconds")
 
 def verify_ingestion(collection_id: str) -> int:
     """
     Verify how many items were successfully ingested.
-    
+
     Returns:
         Number of items in the collection
     """
     stac_search_endpoint = f"{geocatalog_url}/stac/search"
-    
+
     response = requests.get(
         stac_search_endpoint,
         json={"collection": [collection_id]},
         headers=getBearerToken(),
         params={"api-version": api_version, "sign": "true"}
     )
-    
-    
+
+
     if response.status_code == 200:
         result = response.json()['features']
         total = len(result)
-        print(f"\n📊 Collection {collection_id} now contains {total} items")
+        print(f"\nCollection {collection_id} now contains {total} items")
         return total
     else:
-        print(f"\n⚠️ Could not verify collection items: {response.status_code}")
+        print(f"\nCould not verify collection items: {response.status_code}")
         return 0
+
+# ========== ARGUMENT PARSING ==========
+
+def parse_arguments():
+    """
+    Parse command-line arguments for configurable ingestion parameters.
+
+    Returns:
+        argparse.Namespace: Parsed command-line arguments
+    """
+    parser = argparse.ArgumentParser(
+        description="Ingest geospatial data from Microsoft Planetary Computer to GeoCatalog",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    parser.add_argument(
+        "--geocatalog-url",
+        type=str,
+        required=True,
+        help="GeoCatalog base URL"
+    )
+
+    parser.add_argument(
+        "--pc-collection",
+        type=str,
+        required=True,
+        help="Planetary Computer collection ID (e.g., modis-13Q1-061, modis-11A1-061)"
+    )
+
+    parser.add_argument(
+        "--bbox-aoi",
+        type=float,
+        nargs=4,
+        required=True,
+        metavar=("MIN_LON", "MIN_LAT", "MAX_LON", "MAX_LAT"),
+        help="Bounding box for area of interest [min_lon, min_lat, max_lon, max_lat]"
+    )
+
+    parser.add_argument(
+        "--date-range",
+        type=str,
+        required=True,
+        help="Date range for data search in ISO format (start/end)"
+    )
+
+    parser.add_argument(
+        "--region",
+        type=str,
+        required=True,
+        help="Region name for the collection (e.g., nigeria, ghana, west-africa, global)"
+    )
+
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=100,
+        help="Number of items to send per batch request"
+    )
+
+    parser.add_argument(
+        "--api-version",
+        type=str,
+        default="2025-04-30-preview",
+        help="GeoCatalog API version"
+    )
+
+    parser.add_argument(
+        "--mpc-app-id",
+        type=str,
+        default="https://geocatalog.spatio.azure.com",
+        help="Microsoft Planetary Computer application ID for authentication"
+    )
+
+    return parser.parse_args()
 
 # ========== MAIN EXECUTION ==========
 
 if __name__ == "__main__":
-    
-    # Configuration
-    geocatalog_url = "https://geospatialdm.fmd9dgfcd2fab5hw.westeurope.geocatalog.spatio.azure.com"
-    geocatalog_url = geocatalog_url.rstrip("/")
-    api_version = "2025-04-30-preview"
-    MPC_APP_ID = "https://geocatalog.spatio.azure.com"
 
-    # User selections
-    # pc_collection = "modis-11A1-061" # for MODIS land surface temperature
-    pc_collection = "modis-13Q1-061"
-    bbox_aoi = [2.316388, 3.837669, 15.126447, 14.153350]
-    param_date_range = "2000-02-18/2025-09-01"
+    # Parse command-line arguments
+    args = parse_arguments()
 
+    # Set global configuration from arguments
+    geocatalog_url = args.geocatalog_url.rstrip("/")
+    api_version = args.api_version
+    MPC_APP_ID = args.mpc_app_id
+
+    # Set ingestion parameters from arguments
+    pc_collection = args.pc_collection
+    bbox_aoi = args.bbox_aoi
+    param_date_range = args.date_range
+    region = args.region
+    batch_size = args.batch_size
 
     print("=" * 60)
     print("OPTIMIZED PLANETARY COMPUTER PRO INGESTION")
     print("=" * 60)
+    print(f"GeoCatalog URL: {geocatalog_url}")
     print(f"Collection: {pc_collection}")
+    print(f"Region: {region}")
     print(f"Bounding box: {bbox_aoi}")
     print(f"Date range: {param_date_range}")
+    print(f"Batch size: {batch_size}")
     print("=" * 60)
-    
+
     try:
-        collection_id, operation_ids = optimized_batch_ingest(batch_size=100)
-        
+        collection_id, operation_ids = optimized_batch_ingest(batch_size=batch_size, region=region)
+
         if operation_ids:
             print("\nMonitoring ingestion operations...")
             monitor_ingestion_operations(operation_ids)
-        
+
         # Verify the ingestion
         time.sleep(10)  # Give it a moment to process
         verify_ingestion(collection_id)
-        
+
     except Exception as e:
-        print(f"\n❌ Error during ingestion: {e}")
+        print(f"\nError during ingestion: {e}")
         import traceback
         traceback.print_exc()

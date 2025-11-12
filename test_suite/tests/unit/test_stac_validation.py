@@ -9,7 +9,7 @@ import json
 from pystac import Item
 from pystac.validation import validate_dict
 
-from src.stac_conversion import (
+from src.stac_creation.stac_conversion import (
     process_cog_to_stac,
     create_stac_item_from_cog_chirps,
     enhance_stac_item_with_metadata_chirps,
@@ -20,8 +20,8 @@ from src.stac_conversion import (
 class TestStacSchemaValidation:
     """Tests that generated STAC items are valid against official schema."""
     
-    @patch('src.stac_conversion.create_stac_item')
-    @patch('src.stac_conversion.MemoryFile')
+    @patch('src.stac_creation.stac_conversion.create_stac_item')
+    @patch('src.stac_creation.stac_conversion.MemoryFile')
     def test_stac_item_validates_against_schema(self, mock_memory_file, mock_create_stac):
         """Test that created STAC item validates against official STAC schema."""
         # Setup mocks
@@ -75,9 +75,9 @@ class TestStacSchemaValidation:
         except Exception as e:
             pytest.fail(f"STAC item failed validation: {e}")
     
-    @patch('src.stac_conversion.enhance_stac_item_with_metadata_chirps')
-    @patch('src.stac_conversion.create_stac_item_from_cog_chirps')
-    @patch('src.stac_conversion.extract_metadata_from_filename_chirps')
+    @patch('src.stac_creation.stac_conversion.enhance_stac_item_with_metadata_chirps')
+    @patch('src.stac_creation.stac_conversion.create_stac_item_from_cog_chirps')
+    @patch('src.stac_creation.stac_conversion.extract_metadata_from_filename_chirps')
     def test_complete_stac_conversion_validates(self, mock_extract, mock_create, mock_enhance):
         """Test that the complete conversion process produces valid STAC."""
         mock_blob_client = MagicMock()
@@ -186,8 +186,8 @@ class TestStacSchemaValidation:
         assert metadata['date'].day == expected_day
         assert metadata['date'].tzinfo == timezone.utc
     
-    @patch('src.stac_conversion.create_stac_item_from_cog_chirps')
-    @patch('src.stac_conversion.enhance_stac_item_with_metadata_chirps')
+    @patch('src.stac_creation.stac_conversion.create_stac_item_from_cog_chirps')
+    @patch('src.stac_creation.stac_conversion.enhance_stac_item_with_metadata_chirps')
     def test_datetime_format_in_stac_items(self, mock_enhance, mock_create):
         """Test that datetime is properly formatted in STAC items."""
         mock_blob_client = MagicMock()
@@ -416,8 +416,8 @@ class TestStacItemAssets:
 class TestStacItemValidationRealWorld:
     """Integration-style tests with realistic STAC items."""
     
-    @patch('src.stac_conversion.create_stac_item')
-    @patch('src.stac_conversion.MemoryFile')
+    @patch('src.stac_creation.stac_conversion.create_stac_item')
+    @patch('src.stac_creation.stac_conversion.MemoryFile')
     def test_full_chirps_stac_item_validates(self, mock_memory_file, mock_create_stac):
         """Test a complete realistic CHIRPS STAC item validates."""
         from pystac import Asset

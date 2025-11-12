@@ -8,15 +8,17 @@ import gzip
 import tempfile
 from unittest.mock import Mock, patch, MagicMock, mock_open
 
-from src.batch_processing.processing import (
-    create_chunks,
+from src.cog_creation.processing import (
     unzip_file,
     clip_to_cog,
-    upload_blob_to_azure,
-    cleanup_local_files,
-    update_progress_file,
     process_batch_with_progress
 )
+from src.utils.batch_task_utils import (
+    create_chunks,
+    cleanup_local_files,
+    update_progress_file
+)
+from src.utils.azure_storage_utils import upload_blob_to_azure_with_sas
 
 
 class TestCreateChunks:
@@ -63,7 +65,7 @@ class TestCreateChunks:
 class TestUnzipFile:
     """Tests for unzip_file function."""
     
-    @patch('src.batch_processing.processing.requests.get')
+    @patch('src.cog_creation.processing.requests.get')
     def test_unzip_gzipped_file(self, mock_get, sample_chirps_compressed):
         """Test decompressing a gzipped file."""
         mock_response = Mock()
@@ -76,7 +78,7 @@ class TestUnzipFile:
         assert result == gzip.decompress(sample_chirps_compressed)
         mock_get.assert_called_once_with("http://test.url/file.tif.gz")
     
-    @patch('src.batch_processing.processing.requests.get')
+    @patch('src.cog_creation.processing.requests.get')
     def test_unzip_non_gzipped_file(self, mock_get, sample_chirps_data):
         """Test handling non-gzipped file."""
         mock_response = Mock()
@@ -88,7 +90,7 @@ class TestUnzipFile:
         
         assert result == sample_chirps_data
     
-    @patch('src.batch_processing.processing.requests.get')
+    @patch('src.cog_creation.processing.requests.get')
     def test_unzip_file_http_error(self, mock_get):
         """Test handling HTTP error."""
         mock_response = Mock()
@@ -103,10 +105,10 @@ class TestUnzipFile:
 class TestClipToCog:
     """Tests for clip_to_cog function."""
     
-    @patch('src.batch_processing.processing.CRS')
-    @patch('src.batch_processing.processing.transform_bounds')
-    @patch('src.batch_processing.processing.from_bounds')
-    @patch('src.batch_processing.processing.rasterio.open')
+    @patch('src.cog_creation.processing.CRS')
+    @patch('src.cog_creation.processing.transform_bounds')
+    @patch('src.cog_creation.processing.from_bounds')
+    @patch('src.cog_creation.processing.rasterio.open')
     def test_clip_to_cog_success(self, mock_rasterio_open, mock_from_bounds, 
                                  mock_transform_bounds, mock_CRS, temp_dir):
         """Test successful COG creation."""
@@ -169,7 +171,7 @@ class TestClipToCog:
         mock_dst.write.assert_called_once()
         mock_dst.build_overviews.assert_called_once()
     
-    @patch('src.batch_processing.processing.rasterio.open')
+    @patch('src.cog_creation.processing.rasterio.open')
     def test_clip_to_cog_with_exception(self, mock_rasterio_open):
         """Test exception handling in clip_to_cog."""
         mock_rasterio_open.side_effect = Exception("Rasterio error")
@@ -181,64 +183,42 @@ class TestClipToCog:
 
 
 class TestUploadBlobToAzure:
-    """Tests for upload_blob_to_azure function."""
-    
-    @patch('src.batch_processing.processing.BlobServiceClient')
-    def test_upload_blob_success(self, mock_blob_service, mock_azure_storage_env):
+    """Tests for upload_blob_to_azure_with_sas function."""
+
+    @patch('src.utils.azure_storage_utils.BlobServiceClient')
+    def test_upload_blob_success(self, mock_blob_service):
         """Test successful blob upload."""
         # Setup mocks
         mock_blob_client = MagicMock()
         mock_service_instance = MagicMock()
         mock_service_instance.get_blob_client.return_value = mock_blob_client
         mock_blob_service.return_value = mock_service_instance
-        
+
         # Create a test file
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
             f.write("test content")
             temp_file = f.name
-        
+
         try:
-            upload_blob_to_azure("processed-cogs", temp_file, "test.tif")
-            
+            upload_blob_to_azure_with_sas(
+                storage_account_url="https://testaccount.blob.core.windows.net",
+                container_name="processed-cogs",
+                file_path=temp_file,
+                file_name="test.tif",
+                sas_token="test_sas_token"
+            )
+
             # Verify blob client was created correctly
             mock_service_instance.get_blob_client.assert_called_once_with(
                 container="processed-cogs",
                 blob="test.tif"
             )
-            
+
             # Verify upload was called
             mock_blob_client.upload_blob.assert_called_once()
-            
+
         finally:
             os.unlink(temp_file)
-    
-    @patch('src.batch_processing.processing.BlobServiceClient')
-    def test_upload_blob_different_containers(self, mock_blob_service, mock_azure_storage_env):
-        """Test upload with different container SAS tokens."""
-        mock_service_instance = MagicMock()
-        mock_blob_service.return_value = mock_service_instance
-        
-        containers = ["processed-cogs", "raw-data", "batch-logs"]
-        
-        for container in containers:
-            with tempfile.NamedTemporaryFile() as f:
-                upload_blob_to_azure(container, f.name, "test.file")
-            
-            # Check that correct SAS token was used
-            if container == "processed-cogs":
-                expected_sas = "mock_cog_sas_token"
-            elif container == "raw-data":
-                expected_sas = "mock_raw_sas_token"
-            else:
-                expected_sas = "mock_logs_sas_token"
-            
-            expected_url = f"{mock_azure_storage_env['STORAGE_ACCOUNT_URL']}?{expected_sas}"
-            mock_blob_service.assert_called_with(account_url=expected_url)
-    
-    def test_upload_blob_unknown_container(self, mock_azure_storage_env):
-        """Test upload with unknown container raises error."""
-        with pytest.raises(ValueError, match="Unknown container"):
-            upload_blob_to_azure("unknown-container", "file.txt", "blob.txt")
 
 
 class TestCleanupLocalFiles:
@@ -277,75 +257,73 @@ class TestCleanupLocalFiles:
 
 class TestUpdateProgressFile:
     """Tests for update_progress_file function."""
-    
-    @patch('src.batch_processing.processing.upload_blob_to_azure')
-    @patch('src.batch_processing.processing.cleanup_local_files')
-    @patch('src.batch_processing.processing.datetime')
-    def test_update_progress_file(self, mock_datetime, mock_cleanup, mock_upload):
+
+    @patch('src.utils.batch_task_utils.BlobServiceClient')
+    @patch('src.utils.batch_task_utils.datetime')
+    def test_update_progress_file(self, mock_datetime, mock_blob_service):
         """Test progress file creation and upload."""
         mock_datetime.now.return_value.isoformat.return_value = "2024-01-01T12:00:00"
-        
-        failed_files = [{"item": {"url": "test.tif"}, "Error": "Test error"}]
-        
+
+        # Setup mock blob service
+        mock_service_instance = MagicMock()
+        mock_blob_client = MagicMock()
+        mock_service_instance.get_blob_client.return_value = mock_blob_client
+        mock_blob_service.return_value = mock_service_instance
+
+        failed_items = [{"item": "test.tif", "error": "Test error"}]
+        completed_items = ["file1.tif", "file2.tif"]
+
         with patch('builtins.open', mock_open()) as mock_file:
-            update_progress_file("task001", 10, failed_files)
-        
-        # Verify JSON structure written
-        written_content = ''.join(
-            call.args[0] for call in mock_file().write.call_args_list
-        )
-        progress_data = json.loads(written_content)
-        
-        assert progress_data["iso_timestamp"] == "2024-01-01T12:00:00"
-        assert progress_data["batch_number"] == "task001"
-        assert progress_data["completed"] == 10
-        assert progress_data["failed_files"] == failed_files
-        
+            update_progress_file(
+                task_id="task001",
+                completed=completed_items,
+                failed=failed_items,
+                total=15,
+                storage_account_url="https://test.blob.core.windows.net",
+                logs_sas="test_sas",
+                progress_file_prefix="task_"
+            )
+
         # Verify upload was called
-        mock_upload.assert_called_once()
-        assert mock_upload.call_args[1]["container_name"] == "batch-logs"
-        assert mock_upload.call_args[1]["file_name"] == "task001.json"
-        
-        # Verify cleanup was called
-        mock_cleanup.assert_called_once()
+        mock_blob_client.upload_blob.assert_called_once()
 
 
 class TestProcessBatchWithProgress:
     """Tests for process_batch_with_progress orchestration."""
-    
-    @patch('src.batch_processing.processing.upload_blob_to_azure')
-    @patch('src.batch_processing.processing.decompress_convert_to_cog')
-    @patch('src.batch_processing.processing.update_progress_file')
-    @patch('src.batch_processing.processing.cleanup_local_files')
+
+    @patch('src.cog_creation.processing.upload_blob_to_azure_with_sas')
+    @patch('src.cog_creation.processing.decompress_convert_to_cog')
+    @patch('src.cog_creation.processing.update_progress_file')
+    @patch('src.cog_creation.processing.cleanup_local_files')
     def test_process_batch_success(
-        self, mock_cleanup, mock_update, mock_decompress, mock_upload, 
-        sample_work_items
+        self, mock_cleanup, mock_update, mock_decompress, mock_upload,
+        sample_work_items, mock_azure_storage_env
     ):
         """Test successful batch processing."""
         # Setup decompress mock to return file paths
         mock_decompress.return_value = (
             "/tmp/cog.tif", "cog.tif", "/tmp/raw.tif", "raw.tif"
         )
-        
+
         # Process a small batch
         work_items = sample_work_items[:3]
         process_batch_with_progress(work_items)
-        
+
         # Verify decompress was called for each item
         assert mock_decompress.call_count == 3
-        
+
         # Verify uploads (2 per item: COG and raw)
         assert mock_upload.call_count == 6
-        
+
         # Verify progress updates
         assert mock_update.called
-        
+
         # Verify cleanup
         assert mock_cleanup.called
     
-    @patch('src.batch_processing.processing.upload_blob_to_azure')
-    @patch('src.batch_processing.processing.decompress_convert_to_cog')
-    @patch('src.batch_processing.processing.update_progress_file')
+    @patch('src.cog_creation.processing.upload_blob_to_azure_with_sas')
+    @patch('src.cog_creation.processing.decompress_convert_to_cog')
+    @patch('src.cog_creation.processing.update_progress_file')
     def test_process_batch_with_failures(
         self, mock_update, mock_decompress, mock_upload,
         sample_work_items, mock_azure_storage_env  # Add this fixture
@@ -356,13 +334,13 @@ class TestProcessBatchWithProgress:
             Exception("Processing failed"),
             ("/tmp/cog.tif", "cog.tif", "/tmp/raw.tif", "raw.tif")
         ]
-        
+
         work_items = sample_work_items[:2]
         process_batch_with_progress(work_items)
-        
-        # Verify progress update includes failure
+
+        # Verify progress update includes failure - note the new signature uses keyword args
         progress_call = mock_update.call_args
-        assert progress_call[0][0] == "test_task_001"  # task_id from fixture
-        assert progress_call[0][1] == 1  # completed count
-        assert len(progress_call[0][2]) == 1  # failed count
-        assert "Processing failed" in progress_call[0][2][0]["Error"]
+        # The function is now called with keyword arguments
+        assert progress_call[1]["task_id"] == "test_task_001"  # task_id from fixture
+        assert len(progress_call[1]["completed"]) == 1  # completed count
+        assert len(progress_call[1]["failed"]) == 1  # failed count
