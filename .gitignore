@@ -6,4 +6,4 @@ azurite
 .coverage
 .pytest_cache
 htmlcov
-CLAUDE.md
+CLAUDE.mdnotebooks/
